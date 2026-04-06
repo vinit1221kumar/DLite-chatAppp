@@ -1,0 +1,128 @@
+version: "3.9"
+
+services:
+  api-gateway:
+    build:
+      context: ./D-Lite-api-gateway
+    env_file: ./.env
+    environment:
+      GATEWAY_PORT: ${GATEWAY_PORT:-4000}
+      AUTH_SERVICE_URL: http://auth-service:${AUTH_PORT:-4001}
+      CHAT_SERVICE_URL: http://chat-service:${CHAT_PORT:-4002}
+      CALL_SERVICE_URL: http://call-service:${CALL_PORT:-4003}
+      MEDIA_SERVICE_URL: http://media-service:${MEDIA_PORT:-4004}
+      GATEWAY_CORS_ORIGIN: ${GATEWAY_CORS_ORIGIN:-*}
+    ports:
+      - "${GATEWAY_PORT:-4000}:4000"
+    depends_on:
+      - auth-service
+      - chat-service
+      - call-service
+      - media-service
+    restart: unless-stopped
+
+  auth-service:
+    build:
+      context: ./D-Lite-auth-service
+    env_file: ./.env
+    environment:
+      PORT: ${AUTH_PORT:-4001}
+      NODE_ENV: ${NODE_ENV:-production}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+    ports:
+      - "${AUTH_PORT:-4001}:4001"
+    restart: unless-stopped
+
+  chat-service:
+    build:
+      context: ./D-Lite-chat-service
+    env_file: ./.env
+    environment:
+      PORT: ${CHAT_PORT:-4002}
+      NODE_ENV: ${NODE_ENV:-production}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+    ports:
+      - "${CHAT_PORT:-4002}:4002"
+    restart: unless-stopped
+
+  call-service:
+    build:
+      context: ./D-Lite-call-service
+    env_file: ./.env
+    environment:
+      PORT: ${CALL_PORT:-4003}
+      NODE_ENV: ${NODE_ENV:-production}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      JWT_SECRET: ${JWT_SECRET:-replace-with-strong-secret}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-10000}
+      RATE_LIMIT_MAX_MESSAGES: ${RATE_LIMIT_MAX_MESSAGES:-60}
+      CALL_SESSION_TTL_SECONDS: ${CALL_SESSION_TTL_SECONDS:-3600}
+    ports:
+      - "${CALL_PORT:-4003}:4003"
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  media-service:
+    build:
+      context: ./D-Lite-media-service
+    env_file: ./.env
+    environment:
+      PORT: ${MEDIA_PORT:-4004}
+      NODE_ENV: ${NODE_ENV:-production}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-50}
+      CLOUDINARY_FOLDER: ${CLOUDINARY_FOLDER:-d-lite/media}
+    ports:
+      - "${MEDIA_PORT:-4004}:4004"
+    restart: unless-stopped
+
+  backup-worker:
+    build:
+      context: ./D-Lite-backup-worker
+    env_file: ./.env
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+    depends_on:
+      - mongo
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend-service
+      args:
+        NEXT_PUBLIC_FIREBASE_API_KEY: ${NEXT_PUBLIC_FIREBASE_API_KEY:-}
+        NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN:-}
+        NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${NEXT_PUBLIC_FIREBASE_PROJECT_ID:-}
+        NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET:-}
+        NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID:-}
+        NEXT_PUBLIC_FIREBASE_APP_ID: ${NEXT_PUBLIC_FIREBASE_APP_ID:-}
+        NEXT_PUBLIC_FIREBASE_DATABASE_URL: ${NEXT_PUBLIC_FIREBASE_DATABASE_URL:-}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api-gateway
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  mongo_data:
+

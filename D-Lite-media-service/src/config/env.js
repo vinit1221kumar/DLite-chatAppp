@@ -1,16 +1,9 @@
 import 'dotenv/config'
 
-const required = [
-  'CLOUDINARY_CLOUD_NAME',
-  'CLOUDINARY_API_KEY',
-  'CLOUDINARY_API_SECRET',
-]
-
+const required = ['CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET']
 const missing = required.filter((key) => !process.env[key])
 
-if (missing.length > 0) {
-  throw new Error(`Missing required environment variables: ${missing.join(', ')}`)
-}
+export const isMediaStorageConfigured = () => missing.length === 0
 
 const parseOrigins = (value) => {
   const origins = (value || '*')
@@ -26,11 +19,12 @@ export const env = {
   corsOrigins: parseOrigins(process.env.CORS_ORIGINS),
   maxFileSizeMb: Number.parseInt(process.env.MAX_FILE_SIZE_MB || '10', 10),
   cloudinary: {
-    cloudName: process.env.CLOUDINARY_CLOUD_NAME,
-    apiKey: process.env.CLOUDINARY_API_KEY,
-    apiSecret: process.env.CLOUDINARY_API_SECRET,
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME || '',
+    apiKey: process.env.CLOUDINARY_API_KEY || '',
+    apiSecret: process.env.CLOUDINARY_API_SECRET || '',
     folder: process.env.CLOUDINARY_FOLDER || 'd-lite/media',
   },
+  missingRequired: missing,
 }
 
 export default env
