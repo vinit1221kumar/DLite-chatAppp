@@ -62,7 +62,7 @@ function getErrorField(e: unknown, key: "code" | "message") {
 function isPermissionDeniedError(e: unknown) {
   const code = getErrorField(e, "code");
   const message = String(getErrorField(e, "message") || "").toLowerCase();
-  // Firebase commonly uses codes like: "permission-denied" / "PERMISSION_DENIED"
+  // SDKs commonly use codes like: "permission-denied" / "PERMISSION_DENIED"
   return code === "permission-denied" || code === "PERMISSION_DENIED" || message.includes("permission denied");
 }
 

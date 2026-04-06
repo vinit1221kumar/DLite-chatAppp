@@ -1,20 +1,20 @@
-export function toFirebaseAuthMessage(error, mode = 'generic') {
+export function toAuthErrorMessage(error, mode = 'generic') {
   const code = error?.code || '';
 
   if (code === 'auth/firebase-not-configured') {
-    return 'Firebase credentials are not configured. Frontend can run, but authentication is disabled until NEXT_PUBLIC_FIREBASE_* values are set.';
+    return 'Authentication is not configured. Frontend can run, but sign-in is disabled until NEXT_PUBLIC_FIREBASE_* values are set.';
   }
 
   if (code === 'auth/invalid-api-key') {
-    return 'Firebase config is missing or invalid. Fill NEXT_PUBLIC_FIREBASE_* values in .env.development.local and restart the dev server.';
+    return 'Auth config is missing or invalid. Fill NEXT_PUBLIC_FIREBASE_* values in .env.development.local and restart the dev server.';
   }
 
   if (code === 'auth/operation-not-allowed') {
-    return 'Google sign-in is disabled. Enable Google provider in Firebase Console → Authentication → Sign-in method.';
+    return 'Google sign-in is disabled. Enable the Google provider in your auth console.';
   }
 
   if (code === 'auth/unauthorized-domain') {
-    return 'This domain is not authorized for Firebase Auth. Add your domain in Firebase Console → Authentication → Settings → Authorized domains.';
+    return 'This domain is not authorized for sign-in. Add your domain to the authorized domains list in your auth provider.';
   }
 
   if (code === 'auth/popup-blocked') {
@@ -30,7 +30,7 @@ export function toFirebaseAuthMessage(error, mode = 'generic') {
   }
 
   if (code === 'auth/network-request-failed') {
-    return 'Network error while contacting Firebase. Check your internet connection and try again.';
+    return 'Network error while contacting the auth provider. Check your internet connection and try again.';
   }
 
   if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
@@ -66,3 +66,6 @@ export function toFirebaseAuthMessage(error, mode = 'generic') {
 
   return 'Authentication failed. Please try again.';
 }
+
+// Backward compatibility: older screens still import this symbol.
+export const toFirebaseAuthMessage = toAuthErrorMessage;

@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { AppHeaderMenu } from '@/components/AppHeaderMenu';
 import { AuthCardBranding } from '@/components/AuthCardBranding';
 import { AuthPageBackground } from '@/components/AuthPageBackground';
-import { toFirebaseAuthMessage } from '@/lib/firebaseAuthErrors';
+import { toAuthErrorMessage } from '@/lib/firebaseAuthErrors';
 
 export default function RegisterPage() {
   const { register, loginWithGoogle, isAuthenticated, user, loading: authLoading, logout } = useAuth();
@@ -30,7 +30,7 @@ export default function RegisterPage() {
       await register(username, email, password);
       router.push('/dashboard');
     } catch (err) {
-      setError(toFirebaseAuthMessage(err, 'register'));
+      setError(toAuthErrorMessage(err, 'register'));
     } finally {
       setSubmitting(false);
     }
@@ -43,7 +43,7 @@ export default function RegisterPage() {
       await loginWithGoogle();
       router.push('/dashboard');
     } catch (err) {
-      setError(toFirebaseAuthMessage(err, 'google'));
+      setError(toAuthErrorMessage(err, 'google'));
     } finally {
       setGoogleSubmitting(false);
     }
@@ -170,7 +170,7 @@ export default function RegisterPage() {
             disabled={googleSubmitting || submitting}
           >
             <Chrome className="mr-2 h-4 w-4" />
-            {googleSubmitting ? 'Connecting…' : 'Continue with Google'}
+            {googleSubmitting ? 'Connecting…' : 'Sign in with Google'}
           </Button>
         </form>
 

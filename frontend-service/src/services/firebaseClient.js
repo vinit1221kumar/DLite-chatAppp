@@ -18,7 +18,7 @@ const requiredKeys = ['apiKey', 'authDomain', 'projectId', 'appId'];
 
 function ensureClient() {
   if (typeof window === 'undefined') {
-    throw new Error('Firebase client is only available in the browser runtime.');
+    throw new Error('Client auth SDK is only available in the browser runtime.');
   }
 }
 
@@ -27,7 +27,7 @@ export function isFirebaseConfigured() {
 }
 
 export function createFirebaseConfigError() {
-  const error = new Error('Firebase configuration is missing. Set NEXT_PUBLIC_FIREBASE_* environment variables.');
+  const error = new Error('Authentication configuration is missing. Set NEXT_PUBLIC_FIREBASE_* environment variables.');
   error.code = 'auth/firebase-not-configured';
   return error;
 }

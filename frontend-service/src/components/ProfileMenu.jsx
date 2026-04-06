@@ -177,7 +177,7 @@ export function ProfileMenu() {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file || !user?.uid) return;
-    // FIX: Upload to Firebase Storage + persist photoURL per UID so all clients see the correct image.
+    // FIX: Upload to cloud storage + persist photoURL per UID so all clients see the correct image.
     (async () => {
       try {
         const url = await setUserProfilePhoto({ userId: user.uid, file });
