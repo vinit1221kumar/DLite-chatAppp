@@ -7,8 +7,8 @@ function sanitizeString(value) {
 function buildDocument(body) {
   const now = new Date();
   const scope = body?.scope === 'group' ? 'group' : 'direct';
-  const firebaseCreatedAt = Number(body?.firebaseCreatedAt || body?.createdAt || Date.now());
-  const firebaseUpdatedAt = Number(body?.firebaseUpdatedAt || body?.updatedAt || firebaseCreatedAt);
+  const sourceCreatedAt = Number(body?.sourceCreatedAt || body?.createdAt || Date.now());
+  const sourceUpdatedAt = Number(body?.sourceUpdatedAt || body?.updatedAt || sourceCreatedAt);
 
   return {
     backupKey: sanitizeString(body?.backupKey),
@@ -20,9 +20,9 @@ function buildDocument(body) {
     receiverId: scope === 'direct' ? sanitizeString(body?.receiverId) : '',
     content: sanitizeString(body?.content),
     status: body?.status === 'deleted' ? 'deleted' : 'active',
-    source: 'firebase',
-    firebaseCreatedAt,
-    firebaseUpdatedAt,
+    source: sanitizeString(body?.source) || 'client',
+    sourceCreatedAt,
+    sourceUpdatedAt,
     backupUpdatedAt: now,
     deletedAt: body?.status === 'deleted' ? now : null,
   };

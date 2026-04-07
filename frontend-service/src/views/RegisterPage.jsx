@@ -20,17 +20,22 @@ export default function RegisterPage() {
   const [submitting, setSubmitting] = useState(false);
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [usernameHints, setUsernameHints] = useState([]);
   const router = useRouter();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     setError('');
+    setUsernameHints([]);
     try {
       await register(username, email, password);
       router.push('/dashboard');
     } catch (err) {
       setError(toAuthErrorMessage(err, 'register'));
+      if (err?.code === 'auth/username-taken' && Array.isArray(err?.suggestions) && err.suggestions.length > 0) {
+        setUsernameHints(err.suggestions);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -177,6 +182,23 @@ export default function RegisterPage() {
         {error && (
           <div className="anim-pop mt-3 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-800 dark:border-red-500/30 dark:text-red-200">
             {error}
+            {usernameHints.length > 0 && (
+              <div className="mt-2 text-xs text-red-700 dark:text-red-200/90">
+                <div className="font-semibold">Try one of these available usernames:</div>
+                <div className="mt-1 flex flex-wrap gap-2">
+                  {usernameHints.map((hint) => (
+                    <button
+                      key={hint}
+                      type="button"
+                      className="rounded-full border border-red-500/30 bg-red-500/5 px-2 py-1 hover:bg-red-500/10"
+                      onClick={() => setUsername(hint)}
+                    >
+                      {hint}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

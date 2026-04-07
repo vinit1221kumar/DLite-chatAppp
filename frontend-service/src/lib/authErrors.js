@@ -50,6 +50,18 @@ export function toAuthErrorMessage(error, mode = 'generic') {
     return 'Too many attempts. Please wait a bit and try again.'
   }
 
+  if (code === 'auth/username-required') {
+    return 'Username is required.'
+  }
+
+  if (code === 'auth/invalid-username') {
+    return 'Username must be 3–20 characters and use only letters, numbers, or underscores.'
+  }
+
+  if (code === 'auth/username-taken') {
+    return 'This username is already taken.'
+  }
+
   if (mode === 'google') return 'Google sign-in failed. Please try again.'
   if (mode === 'register') return 'Registration failed. Please try again.'
   if (mode === 'login') return 'Login failed. Please try again.'

@@ -44,8 +44,8 @@ export async function ensureMessageBackupIndexes() {
       // Fast upsert by backupKey + common history queries.
       await collection.createIndexes([
         { key: { backupKey: 1 }, unique: true, name: 'uniq_backupKey' },
-        { key: { scope: 1, threadId: 1, firebaseCreatedAt: -1 }, name: 'direct_history' },
-        { key: { scope: 1, groupId: 1, firebaseCreatedAt: -1 }, name: 'group_history' },
+        { key: { scope: 1, threadId: 1, sourceCreatedAt: -1 }, name: 'direct_history' },
+        { key: { scope: 1, groupId: 1, sourceCreatedAt: -1 }, name: 'group_history' },
         { key: { status: 1, backupUpdatedAt: -1 }, name: 'status_updated' },
       ]);
     })().catch((e) => {

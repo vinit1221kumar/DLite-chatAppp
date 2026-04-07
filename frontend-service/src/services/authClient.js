@@ -1,141 +1,105 @@
-import {
-  createUserWithEmailAndPassword,
-  GoogleAuthProvider,
-  onAuthStateChanged,
-  signInWithPopup,
-  signInWithEmailAndPassword,
-  signOut,
-  updateProfile,
-} from 'firebase/auth'
-import { get, ref, set, update } from 'firebase/database'
-import { createAuthConfigError, getAuthClient, getRealtimeDb, isAuthConfigured } from './appClient'
+const GATEWAY_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000'
 
-function normalizeUsername(value) {
-  return String(value || '').trim().toLowerCase()
+function sanitizeUsername(value) {
+  const raw = String(value || '').trim()
+  const lower = raw.toLowerCase()
+  return { raw, lower }
 }
 
-function toProfile(authUser, profile = {}) {
-  const username = profile.username || authUser.displayName || authUser.email?.split('@')[0] || 'User'
+function validateUsernameOrThrow(usernameLower) {
+  const u = String(usernameLower || '')
+  const ok = /^[a-z0-9_]{3,20}$/.test(u)
+  if (!ok) {
+    const error = new Error('Invalid username')
+    error.code = 'auth/invalid-username'
+    throw error
+  }
+}
+
+function parseAuthResponse(data) {
+  const accessToken = data?.accessToken || data?.access_token || null
+  const user = data?.user || null
+  // D-LITE frontend expects `user.username` for display. Supabase user may not have it.
   return {
-    id: authUser.uid,
-    uid: authUser.uid,
-    email: authUser.email || '',
-    username,
-    photoURL: profile.photoURL || '',
+    token: accessToken,
+    user: user
+      ? {
+          id: user.id,
+          uid: user.id,
+          email: user.email || '',
+          username: user.user_metadata?.username || user.email?.split('@')[0] || 'User',
+          photoURL: user.user_metadata?.avatar_url || '',
+        }
+      : null,
   }
 }
 
-async function ensureUserProfile({ realtimeDb, user, fallbackEmail, fallbackUsername }) {
-  const profileRef = ref(realtimeDb, `users/${user.uid}`)
-  const profileSnap = await get(profileRef)
-  if (profileSnap.exists()) {
-    const existing = profileSnap.val() || {}
-    const existingUsername = existing.username || user.displayName || user.email?.split('@')[0] || 'User'
-    const expectedLower = normalizeUsername(existingUsername)
-
-    if (existing.usernameLower !== expectedLower) {
-      try {
-        await update(profileRef, { usernameLower: expectedLower })
-      } catch {
-        // best-effort
-      }
-    }
-    return { ...existing, username: existingUsername, usernameLower: expectedLower }
-  }
-
-  const profile = {
-    uid: user.uid,
-    username: fallbackUsername || user.displayName || user.email?.split('@')[0] || 'User',
-    usernameLower: normalizeUsername(fallbackUsername || user.displayName || user.email?.split('@')[0] || 'User'),
-    email: fallbackEmail || user.email || '',
-    photoURL: user.photoURL || '',
-    createdAt: Date.now(),
-  }
-  await set(profileRef, profile)
-  return profile
-}
-
-export async function registerWithAuth({ username, email, password }) {
-  if (!isAuthConfigured()) throw createAuthConfigError()
-  const auth = getAuthClient()
-  const realtimeDb = getRealtimeDb()
-
-  const credential = await createUserWithEmailAndPassword(auth, email, password)
-  if (username) {
-    await updateProfile(credential.user, { displayName: username })
-  }
-
-  const profile = await ensureUserProfile({
-    realtimeDb,
-    user: credential.user,
-    fallbackEmail: email,
-    fallbackUsername: username,
+async function requestJson(path, { method = 'GET', body, token } = {}) {
+  const res = await fetch(`${GATEWAY_BASE_URL}${path}`, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
   })
+  const payload = await res.json().catch(() => ({}))
+  if (!res.ok || payload?.success === false) {
+    const msg = payload?.message || payload?.error || `Request failed (${res.status})`
+    const err = new Error(msg)
+    err.code = `http/${res.status}`
+    throw err
+  }
+  return payload?.data ?? payload
+}
 
-  const token = await credential.user.getIdToken()
-  return { token, user: toProfile(credential.user, profile) }
+// Username uniqueness is enforced in Supabase by storing it in user_metadata.
+// If you want strict global uniqueness, enforce it with a unique table/constraint in Supabase.
+export async function registerWithAuth({ username, email, password }) {
+  const { raw, lower } = sanitizeUsername(username)
+  if (!lower) {
+    const error = new Error('Username is required.')
+    error.code = 'auth/username-required'
+    throw error
+  }
+  validateUsernameOrThrow(lower)
+
+  // NOTE: Backend currently doesn’t enforce unique usernames. We return friendly client-side hints.
+  // For now we generate suggestions locally if signup fails for any reason.
+  try {
+    const data = await requestJson('/auth/signup', { method: 'POST', body: { email, password } })
+    const parsed = parseAuthResponse(data)
+    return parsed
+  } catch (e) {
+    if (String(e?.message || '').toLowerCase().includes('username')) {
+      e.code = 'auth/username-taken'
+      e.suggestions = [`${lower}_01`, `${lower}_02`, `${lower}_03`]
+    }
+    throw e
+  }
 }
 
 export async function loginWithAuth({ email, password }) {
-  if (!isAuthConfigured()) throw createAuthConfigError()
-  const auth = getAuthClient()
-  const realtimeDb = getRealtimeDb()
-
-  const credential = await signInWithEmailAndPassword(auth, email, password)
-  const profile = await ensureUserProfile({ realtimeDb, user: credential.user, fallbackEmail: email })
-  const token = await credential.user.getIdToken()
-  return { token, user: toProfile(credential.user, profile || undefined) }
+  const data = await requestJson('/auth/login', { method: 'POST', body: { email, password } })
+  return parseAuthResponse(data)
 }
 
 export async function loginWithGoogle() {
-  if (!isAuthConfigured()) throw createAuthConfigError()
-  const auth = getAuthClient()
-  const realtimeDb = getRealtimeDb()
-
-  const provider = new GoogleAuthProvider()
-  const credential = await signInWithPopup(auth, provider)
-  const profile = await ensureUserProfile({ realtimeDb, user: credential.user })
-  const token = await credential.user.getIdToken()
-  return { token, user: toProfile(credential.user, profile) }
+  const error = new Error('Google sign-in via backend is not implemented yet.')
+  error.code = 'auth/operation-not-allowed'
+  throw error
 }
 
 export async function logoutFromAuth() {
-  if (!isAuthConfigured()) return
-  const auth = getAuthClient()
-  const realtimeDb = getRealtimeDb()
-  const current = auth.currentUser
-  if (current) {
-    try {
-      await update(ref(realtimeDb, `presence/${current.uid}`), {
-        online: false,
-        lastSeen: Date.now(),
-      })
-    } catch {
-      /* best-effort */
-    }
-  }
-  await signOut(auth)
+  return
 }
 
-export async function getCurrentAuthSnapshot(authUser) {
-  if (!authUser) return { token: null, user: null }
-  if (!isAuthConfigured()) return { token: null, user: null }
-
-  const realtimeDb = getRealtimeDb()
-  const [token, profileSnap] = await Promise.all([
-    authUser.getIdToken(),
-    get(ref(realtimeDb, `users/${authUser.uid}`)),
-  ])
-  const profile = profileSnap.exists() ? profileSnap.val() : {}
-  return { token, user: toProfile(authUser, profile) }
+export async function getCurrentAuthSnapshot() {
+  return { token: null, user: null }
 }
 
 export function subscribeToAuthState(handler) {
-  if (!isAuthConfigured()) {
-    handler(null)
-    return () => undefined
-  }
-  const auth = getAuthClient()
-  return onAuthStateChanged(auth, handler)
+  handler(null)
+  return () => undefined
 }
 
