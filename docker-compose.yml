@@ -142,6 +142,9 @@ services:
         NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
         NEXT_PUBLIC_ICE_SERVERS_JSON: ${NEXT_PUBLIC_ICE_SERVERS_JSON:-[{"urls":["stun:stun.l.google.com:19302"]}]}
+    env_file: ./.env
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
     ports:
       - "3000:3000"
     depends_on:
