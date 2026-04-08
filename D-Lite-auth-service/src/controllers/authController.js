@@ -1,4 +1,7 @@
 import { isSupabaseConfigured, supabase } from '../utils/supabase.js'
+import bcrypt from 'bcryptjs'
+import { createLocalUser, getLocalUserByEmail } from '../utils/localAuthStore.js'
+import { issueLocalTokens } from '../utils/localJwt.js'
 
 const formatAuthResponse = (authData) => ({
   accessToken: authData.session?.access_token || null,
@@ -10,27 +13,52 @@ const formatAuthResponse = (authData) => ({
 
 export const signup = async (req, res, next) => {
   try {
+    const { email, password, username } = req.body
+
+    // Fallback local auth (dev/demo) when Supabase is unavailable.
     if (!isSupabaseConfigured() || !supabase) {
-      return res.status(503).json({
-        success: false,
-        message: 'Auth service is not configured (missing SUPABASE_URL / SUPABASE_ANON_KEY)',
+      const passwordHash = await bcrypt.hash(String(password), 10)
+      const user = createLocalUser({ email, username, passwordHash })
+      const data = issueLocalTokens(user)
+      return res.status(201).json({
+        success: true,
+        message: 'Signup successful',
+        data: formatAuthResponse(data),
       })
     }
 
-    const { email, password, username } = req.body
-
-    // Supabase creates the user and returns the authenticated session when allowed.
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: username
-        ? {
-            data: {
-              username: String(username).trim(),
-            },
-          }
-        : undefined,
-    })
+    let data
+    let error
+    try {
+      // Supabase creates the user and returns the authenticated session when allowed.
+      const result = await supabase.auth.signUp({
+        email,
+        password,
+        options: username
+          ? {
+              data: {
+                username: String(username).trim(),
+              },
+            }
+          : undefined,
+      })
+      data = result.data
+      error = result.error
+    } catch (e) {
+      // If Supabase is misconfigured/unreachable (common in local Docker), don't block the app.
+      const msg = String(e?.message || e)
+      if (msg.toLowerCase().includes('fetch failed') || msg.toLowerCase().includes('etimedout') || msg.toLowerCase().includes('enotfound')) {
+        const passwordHash = await bcrypt.hash(String(password), 10)
+        const user = createLocalUser({ email, username, passwordHash })
+        const localData = issueLocalTokens(user)
+        return res.status(201).json({
+          success: true,
+          message: 'Signup successful',
+          data: formatAuthResponse(localData),
+        })
+      }
+      throw e
+    }
 
     if (error) {
       error.status = 400
@@ -49,19 +77,60 @@ export const signup = async (req, res, next) => {
 
 export const login = async (req, res, next) => {
   try {
+    const { email, password } = req.body
+
+    // Fallback local auth (dev/demo) when Supabase is unavailable.
     if (!isSupabaseConfigured() || !supabase) {
-      return res.status(503).json({
-        success: false,
-        message: 'Auth service is not configured (missing SUPABASE_URL / SUPABASE_ANON_KEY)',
+      const user = getLocalUserByEmail(email)
+      if (!user) {
+        return res.status(401).json({ success: false, message: 'Invalid email or password' })
+      }
+
+      const ok = await bcrypt.compare(String(password), user.passwordHash)
+      if (!ok) {
+        return res.status(401).json({ success: false, message: 'Invalid email or password' })
+      }
+
+      const data = issueLocalTokens(user)
+      return res.json({
+        success: true,
+        message: 'Login successful',
+        data: formatAuthResponse(data),
       })
     }
 
-    const { email, password } = req.body
+    let data
+    let error
+    try {
+      const result = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+      data = result.data
+      error = result.error
+    } catch (e) {
+      const msg = String(e?.message || e)
+      if (msg.toLowerCase().includes('fetch failed') || msg.toLowerCase().includes('etimedout') || msg.toLowerCase().includes('enotfound')) {
+        // If Supabase is unreachable, attempt local auth as a fallback.
+        const user = getLocalUserByEmail(email)
+        if (!user) {
+          return res.status(401).json({ success: false, message: 'Invalid email or password' })
+        }
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+        const ok = await bcrypt.compare(String(password), user.passwordHash)
+        if (!ok) {
+          return res.status(401).json({ success: false, message: 'Invalid email or password' })
+        }
+
+        const localData = issueLocalTokens(user)
+        return res.json({
+          success: true,
+          message: 'Login successful',
+          data: formatAuthResponse(localData),
+        })
+      }
+      throw e
+    }
 
     if (error) {
       error.status = 401
@@ -93,7 +162,7 @@ export const requestEmailOtp = async (req, res, next) => {
     if (!isSupabaseConfigured() || !supabase) {
       return res.status(503).json({
         success: false,
-        message: 'Auth service is not configured (missing SUPABASE_URL / SUPABASE_ANON_KEY)',
+        message: 'OTP is unavailable (Supabase not configured)',
       })
     }
 
@@ -130,7 +199,7 @@ export const verifyEmailOtp = async (req, res, next) => {
     if (!isSupabaseConfigured() || !supabase) {
       return res.status(503).json({
         success: false,
-        message: 'Auth service is not configured (missing SUPABASE_URL / SUPABASE_ANON_KEY)',
+        message: 'OTP is unavailable (Supabase not configured)',
       })
     }
 

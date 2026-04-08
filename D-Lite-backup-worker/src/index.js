@@ -13,6 +13,8 @@ if (!isWorkerConfigured()) {
   logger.warn('Backup worker is not configured; running in disabled mode', {
     missing: env.missingRequired,
   })
+  // Keep the process alive so Docker doesn't restart-loop the container.
+  setInterval(() => {}, 60 * 60 * 1000)
 } else {
   // Run once on startup so the worker begins syncing immediately.
   runBackupJob()

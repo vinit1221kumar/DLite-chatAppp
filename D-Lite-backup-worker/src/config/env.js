@@ -1,7 +1,22 @@
 import 'dotenv/config'
 
 const required = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'MONGODB_URI']
-const missing = required.filter((key) => !process.env[key])
+
+const looksLikePlaceholder = (value) => {
+  if (!value) return true
+  const v = String(value).trim()
+  if (!v) return true
+  return (
+    v.includes('your-project-id') ||
+    v.includes('your-supabase-anon-key') ||
+    v.includes('your-supabase-service-role-key') ||
+    v.includes('replace-with-strong-secret') ||
+    v === 'changeme' ||
+    v === 'example'
+  )
+}
+
+const missing = required.filter((key) => looksLikePlaceholder(process.env[key]))
 
 export const isWorkerConfigured = () => missing.length === 0
 

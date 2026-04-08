@@ -12,7 +12,6 @@ app.use(
     origin: env.corsOrigin,
   })
 )
-app.use(express.json())
 app.use(requestLogger)
 
 app.get('/', (_req, res) => {
@@ -40,6 +39,10 @@ app.use('/auth', createServiceProxy(env.authServiceUrl, 'auth'))
 app.use('/chat', createServiceProxy(env.chatServiceUrl, 'chat'))
 app.use('/call', createServiceProxy(env.callServiceUrl, 'call'))
 app.use('/media', createServiceProxy(env.mediaServiceUrl, 'media'))
+
+// Only parse JSON for routes handled by the gateway itself.
+// Proxied routes must receive the original request stream.
+app.use(express.json())
 
 app.use(notFoundHandler)
 app.use(errorHandler)
