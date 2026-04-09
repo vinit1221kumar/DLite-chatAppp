@@ -18,7 +18,7 @@ jobs:
 
       - name: Add friend's fork as remote
         run: |
-          git remote add friend https://github.com/vinit1221kumar/DLite-chatApp.git
+          git remote add friend https://github.com/PRASHANTthm7/DLite-chatApp.git
           git fetch friend
 
       - name: Merge changes from friend's fork
