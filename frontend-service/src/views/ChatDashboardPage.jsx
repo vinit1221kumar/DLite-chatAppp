@@ -57,6 +57,7 @@ import {
   X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { AppMainHeader } from '@/components/AppMainHeader';
 
 export default function ChatDashboardPage() {
@@ -743,9 +744,24 @@ export default function ChatDashboardPage() {
                 )}
 
                 {recentLoading ? (
-                  <div className="flex items-center gap-2 px-2 py-2 text-xs text-amber-700 dark:text-slate-300">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Loading…
+                  <div className="space-y-2 px-1 py-1">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="rounded-xl border border-amber-200/70 bg-white/70 px-3 py-2 dark:border-navy-700/50 dark:bg-navy-950/40"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex min-w-0 flex-1 items-center gap-2">
+                            <Skeleton className="h-8 w-8 rounded-lg" />
+                            <div className="min-w-0 flex-1">
+                              <Skeleton className="h-3.5 w-28" />
+                              <Skeleton className="mt-2 h-3 w-44 opacity-70" />
+                            </div>
+                          </div>
+                          <Skeleton className="h-5 w-8 rounded-full opacity-70" />
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : recentChats.length === 0 ? (
                   <p className="px-2 py-2 text-xs text-amber-700/80 dark:text-slate-300/80">No recent chats yet.</p>
@@ -1082,8 +1098,19 @@ export default function ChatDashboardPage() {
               )}
 
               {messagesLoading && (
-                <div className="rounded-xl border border-amber-200/70 bg-amber-50/80 px-3 py-2 text-xs text-amber-800 dark:border-navy-700/50 dark:bg-navy-900/40 dark:text-slate-300">
-                  Loading messages…
+                <div className="space-y-3">
+                  <div className="flex justify-start">
+                    <Skeleton className="h-16 w-[72%] rounded-2xl rounded-bl-md" />
+                  </div>
+                  <div className="flex justify-end">
+                    <Skeleton className="h-14 w-[62%] rounded-2xl rounded-br-md" />
+                  </div>
+                  <div className="flex justify-start">
+                    <Skeleton className="h-12 w-[52%] rounded-2xl rounded-bl-md" />
+                  </div>
+                  <div className="flex justify-end">
+                    <Skeleton className="h-20 w-[78%] rounded-2xl rounded-br-md" />
+                  </div>
                 </div>
               )}
 

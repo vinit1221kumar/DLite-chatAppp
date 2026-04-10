@@ -282,7 +282,7 @@ export default function LandingPage() {
             transition={{ duration: 0.5 }}
           >
             {[
-              { label: 'Stack', value: 'Vite + React', sub: 'Modern frontend' },
+              { label: 'Stack', value: 'Next.js + React', sub: 'Modern frontend' },
               { label: 'Realtime', value: 'Socket.io', sub: 'Low-latency events' },
               { label: 'UX', value: 'One dashboard', sub: 'Chat, groups, calls' }
             ].map((s) => (
