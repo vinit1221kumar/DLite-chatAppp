@@ -24,4 +24,3 @@ __pycache__/
 *.pyc
 venv/
 venv311/
-app/
