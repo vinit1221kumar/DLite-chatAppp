@@ -32,12 +32,24 @@ SERVICE_MAP = {
 
 app = FastAPI()
 
-# Browser clients hit the gateway from a different origin (e.g. frontend dev server),
+def _parse_origins(value: str) -> list[str]:
+    v = (value or "").strip()
+    if not v:
+        return ["*"]
+    if v == "*":
+        return ["*"]
+    return [o.strip() for o in v.split(",") if o.strip()]
+
+
+_cors_origins = _parse_origins(GATEWAY_CORS_ORIGIN)
+# Browser clients hit the gateway from a different origin (frontend dev server / hosted UI),
 # so CORS must be handled here to avoid preflight failures.
+#
+# Note: `allow_credentials=True` is not compatible with wildcard origins in browsers.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[GATEWAY_CORS_ORIGIN] if GATEWAY_CORS_ORIGIN != "*" else ["*"],
-    allow_credentials=True,
+    allow_origins=_cors_origins,
+    allow_credentials=("*" not in _cors_origins),
     allow_methods=["*"],
     allow_headers=["*"],
 )
