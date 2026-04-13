@@ -3,6 +3,7 @@ from typing import AsyncIterator, Optional
 
 import httpx
 from fastapi import FastAPI, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
 
@@ -30,6 +31,16 @@ SERVICE_MAP = {
 }
 
 app = FastAPI()
+
+# Browser clients hit the gateway from a different origin (e.g. frontend dev server),
+# so CORS must be handled here to avoid preflight failures.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[GATEWAY_CORS_ORIGIN] if GATEWAY_CORS_ORIGIN != "*" else ["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/")
@@ -72,6 +83,10 @@ async def proxy(service: str, path: str, request: Request):
     target = SERVICE_MAP.get(service)
     if not target:
         return JSONResponse(status_code=404, content={"success": False, "message": f"Unknown service prefix: {service}"})
+
+    # Let CORSMiddleware satisfy preflight requests without involving upstream services.
+    if request.method.upper() == "OPTIONS":
+        return Response(status_code=204)
 
     url = f"{target.rstrip('/')}/{path}"
     if request.url.query:
