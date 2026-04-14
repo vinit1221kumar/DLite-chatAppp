@@ -5,6 +5,7 @@ from typing import Optional
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 
 from src.modules.auth.router import router as auth_router
 from src.modules.chat.router import router as chat_router
@@ -45,6 +46,11 @@ async def root():
 @app.get("/health")
 async def health():
     return {"success": True, "service": "core-backend", "status": "ok"}
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return Response(status_code=204)
 
 
 app.include_router(auth_router, prefix="/auth")
