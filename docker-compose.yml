@@ -56,8 +56,19 @@ services:
       - ./worker-service/.env
     environment:
       BACKUP_OUTPUT_DIR: /data
+      # Make worker run as an HTTP web service (useful for status endpoints).
+      WORKER_HTTP_ENABLED: ${WORKER_HTTP_ENABLED:-1}
+      PORT: ${WORKER_PORT:-10000}
+      # Supabase source for backups
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-300}
+      BACKUP_BATCH_SIZE: ${BACKUP_BATCH_SIZE:-500}
+      BACKUP_STATE_FILE: ${BACKUP_STATE_FILE:-/data/state.json}
     volumes:
       - worker_data:/data
+    ports:
+      - "${WORKER_PORT:-10000}:10000"
     restart: unless-stopped
     networks:
       - public
