@@ -77,6 +77,10 @@ services:
       - ./frontend-service/.env
     environment:
       NODE_ENV: ${NODE_ENV:-production}
+      # In local docker-compose we publish 3000:3000, so force the container to listen on 3000
+      # (Render/Railway inject PORT=10000-style values; that's handled by the platform, not compose).
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
     ports:
       - "3000:3000"
     depends_on:

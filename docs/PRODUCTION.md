@@ -9,6 +9,8 @@
   - `AUTH_JWT_SECRET` (keep consistent across services)
 - Optional (media uploads):
   - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
+- Optional (Mongo message backup via Next API routes):
+  - `MONGODB_URI`, `MONGODB_DB_NAME` (set on `frontend-service`)
 
 ### 2) Only expose public ports
 Default `docker-compose.yml` exposes:
