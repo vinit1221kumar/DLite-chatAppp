@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
-from src.modules.auth.router import router as auth_router
+from src.modules.auth.router import init_local_user_persistence, router as auth_router
 from src.modules.chat.router import router as chat_router
 from src.modules.media.router import router as media_router
 
@@ -56,4 +56,10 @@ async def favicon():
 app.include_router(auth_router, prefix="/auth")
 app.include_router(chat_router, prefix="/chat")
 app.include_router(media_router, prefix="/media")
+
+
+@app.on_event("startup")
+async def _init_local_user_persistence_on_startup() -> None:
+    # Initialize local fallback users from the configured persistence backend(s).
+    await init_local_user_persistence()
 

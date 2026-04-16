@@ -31,7 +31,10 @@ def register_chat_handlers(sio, *, user_room, chat_room, validate_token, sb_key,
             r = await client.post(url, headers=headers, json=payload)
         if r.status_code >= 400:
             raise RuntimeError("Failed to save message")
-        rows = r.json()
+        try:
+            rows = r.json()
+        except Exception:
+            rows = None
         return rows[0] if isinstance(rows, list) and rows else payload
 
     @sio.event

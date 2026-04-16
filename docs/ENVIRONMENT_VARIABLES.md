@@ -33,6 +33,10 @@ Notes:
 - **Uvicorn tuning**:
   - **`UVICORN_WORKERS`**
   - **`UVICORN_LOG_LEVEL`**
+- **Local auth persistence (used for the local fallback user store)**:
+  - **`LOCAL_AUTH_PERSISTENCE`**: `file` / `supabase` / `both` (default `file`)
+  - **`LOCAL_AUTH_STATE_FILE`**: path to JSON file that stores the local fallback users (default `data/local_users.json`)
+  - If `supabase` or `both` is enabled, the backend will use `public.local_users` (requires `SUPABASE_SERVICE_ROLE_KEY`)
 
 ### Minimal example
 

@@ -52,5 +52,9 @@ async def validate_token(token: str, *, supabase_api_key: Optional[str] = None) 
         except Exception:
             return None
 
-    return r.json()
+    try:
+        parsed = r.json()
+    except Exception:
+        return None
+    return parsed if isinstance(parsed, dict) else None
 

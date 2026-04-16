@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 import httpx
 from fastapi import APIRouter, Header, Request
@@ -10,6 +10,29 @@ from src.modules.auth.token import claims_user_id, validate_token
 from src.modules.chat.config import SUPABASE_URL, SUPABASE_ANON_KEY, is_supabase_configured, sb_key, sb_service_role_key
 
 router = APIRouter()
+
+
+def _safe_json_list(r: httpx.Response) -> list:
+    try:
+        parsed = r.json()
+    except Exception:
+        return []
+    return parsed if isinstance(parsed, list) else []
+
+
+def _safe_json_dict(r: httpx.Response) -> dict:
+    try:
+        parsed = r.json()
+    except Exception:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _safe_json_any(r: httpx.Response) -> Any:
+    try:
+        return r.json()
+    except Exception:
+        return None
 
 
 def _sb_headers(extra: Optional[Dict[str, str]] = None) -> Dict[str, str]:
@@ -88,7 +111,7 @@ async def search_users(username: str = "", exclude: str = "", authorization: Opt
     if r.status_code >= 400:
         return JSONResponse(status_code=503, content={"success": False, "message": "User search is unavailable"})
 
-    return {"success": True, "users": r.json()}
+    return {"success": True, "users": _safe_json_list(r)}
 
 
 @router.get("/groups/my")
@@ -117,7 +140,7 @@ async def list_my_groups(authorization: Optional[str] = Header(default=None)):
     if r.status_code >= 400:
         return JSONResponse(status_code=503, content={"success": False, "message": "Groups are unavailable"})
 
-    rows = r.json() or []
+    rows = _safe_json_list(r)
     groups = []
     for row in rows:
         chat = (row or {}).get("chats") or {}
@@ -160,7 +183,7 @@ async def ensure_group(req: Request, authorization: Optional[str] = Header(defau
         )
         if r_find.status_code >= 400:
             return JSONResponse(status_code=503, content={"success": False, "message": "Chat storage is unavailable"})
-        items = r_find.json() or []
+        items = _safe_json_list(r_find)
         chat = items[0] if items else None
 
         if not chat:
@@ -173,7 +196,7 @@ async def ensure_group(req: Request, authorization: Optional[str] = Header(defau
             if r_create.status_code >= 400:
                 msg = r_create.text
                 return JSONResponse(status_code=503, content={"success": False, "message": f"Could not create group ({r_create.status_code}): {msg}"})
-            created = r_create.json()
+            created = _safe_json_any(r_create)
             chat = created[0] if isinstance(created, list) else created
 
         chat_id = (chat or {}).get("id")
@@ -220,7 +243,7 @@ async def list_group_members(chat_id: str, authorization: Optional[str] = Header
         return JSONResponse(status_code=503, content={"success": False, "message": "Could not load group members"})
 
     members = []
-    for row in r.json() or []:
+    for row in _safe_json_list(r):
         u = (row or {}).get("users") or {}
         if not u:
             continue
@@ -253,7 +276,7 @@ async def add_member_by_username(chat_id: str, req: Request, authorization: Opti
         r_user = await client.get(u_url, headers=_sb_headers(), params={"select": "id,username", "username": f"eq.{username}", "limit": "1"})
         if r_user.status_code >= 400:
             return JSONResponse(status_code=503, content={"success": False, "message": "User lookup failed"})
-        items = r_user.json() or []
+        items = _safe_json_list(r_user)
         if not items:
             return JSONResponse(status_code=404, content={"success": False, "message": "User not found"})
         target = items[0]
@@ -295,5 +318,5 @@ async def get_messages(chat_id: str, authorization: Optional[str] = Header(defau
     if r.status_code >= 400:
         return JSONResponse(status_code=503, content={"success": False, "message": "Chat storage is unavailable"})
 
-    return {"success": True, "chatId": chat_id, "messages": r.json()}
+    return {"success": True, "chatId": chat_id, "messages": _safe_json_list(r)}
 

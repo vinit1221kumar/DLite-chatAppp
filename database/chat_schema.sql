@@ -20,6 +20,19 @@ create table if not exists public.users (
   created_at timestamptz not null default now()
 );
 
+-- ============================================================================
+-- Local auth fallback users (only used when AUTH_MODE=local or Supabase auth
+-- is intentionally bypassed). Password hashes are stored here so local auth
+-- survives server restarts without relying on in-memory dictionaries.
+-- ============================================================================
+create table if not exists public.local_users (
+  id uuid primary key default gen_random_uuid(),
+  email text not null unique,
+  username text not null unique,
+  password_hash text not null,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.chats (
   id uuid primary key default gen_random_uuid(),
   type text not null check (type in ('direct', 'group')),

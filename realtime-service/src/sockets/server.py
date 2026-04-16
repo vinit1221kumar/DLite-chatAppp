@@ -14,11 +14,21 @@ from src.utils.env import env, looks_placeholder
 SUPABASE_URL = env("SUPABASE_URL")
 SUPABASE_SERVICE_ROLE_KEY = env("SUPABASE_SERVICE_ROLE_KEY")
 SUPABASE_ANON_KEY = env("SUPABASE_ANON_KEY")
-AUTH_JWT_SECRET = env("AUTH_JWT_SECRET") or env("JWT_SECRET") or "dev-only-secret-change-me"
+_DEFAULT_JWT_SECRET = "dev-only-secret-change-me"
+AUTH_JWT_SECRET = env("AUTH_JWT_SECRET") or env("JWT_SECRET") or _DEFAULT_JWT_SECRET
 
 
 def is_supabase_configured() -> bool:
-    return not looks_placeholder(SUPABASE_URL) and not looks_placeholder(SUPABASE_ANON_KEY or SUPABASE_SERVICE_ROLE_KEY)
+    # Supabase is considered usable if the URL is set and at least one key
+    # (anon or service role) is non-placeholder.
+    return not looks_placeholder(SUPABASE_URL) and (
+        not looks_placeholder(SUPABASE_ANON_KEY) or not looks_placeholder(SUPABASE_SERVICE_ROLE_KEY)
+    )
+
+if not is_supabase_configured() and AUTH_JWT_SECRET == _DEFAULT_JWT_SECRET:
+    # If Supabase isn't available, this service falls back to local JWT validation.
+    # Avoid silently accepting tokens signed with a guessable dev secret.
+    raise RuntimeError("AUTH_JWT_SECRET (or JWT_SECRET) must be set when Supabase is not configured")
 
 
 def sb_key() -> str:
@@ -46,7 +56,11 @@ async def validate_token(token: str) -> Optional[dict]:
             return jwt.decode(token, AUTH_JWT_SECRET, algorithms=["HS256"])
         except Exception:
             return None
-    return r.json()
+    try:
+        parsed = r.json()
+    except Exception:
+        return None
+    return parsed if isinstance(parsed, dict) else None
 
 
 def claims_user_id(claims: Optional[dict]) -> Optional[str]:
