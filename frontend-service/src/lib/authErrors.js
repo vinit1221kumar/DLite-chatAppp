@@ -1,5 +1,6 @@
 export function toAuthErrorMessage(error, mode = 'generic') {
   const code = error?.code || ''
+  const message = error?.message || ''
 
   if (code === 'auth/not-configured') {
     return 'Authentication is not configured. Frontend can run, but sign-in is disabled until required environment values are set.'
@@ -67,8 +68,12 @@ export function toAuthErrorMessage(error, mode = 'generic') {
   }
 
   if (mode === 'google') return 'Google sign-in failed. Please try again.'
-  if (mode === 'register') return 'Registration failed. Please try again.'
-  if (mode === 'login') return 'Login failed. Please try again.'
+  if (mode === 'register' || mode === 'login') {
+    // Backend validation errors often come back as HTTP 400 with `detail` text.
+    // Preserve that real message so the user knows what to fix.
+    if (message) return message
+    return mode === 'register' ? 'Registration failed. Please try again.' : 'Login failed. Please try again.'
+  }
 
   return 'Authentication failed. Please try again.'
 }
