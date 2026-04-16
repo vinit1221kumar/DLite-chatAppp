@@ -14,7 +14,13 @@ def _claims_user_id(claims: Optional[dict]) -> Optional[str]:
     return str(uid).strip() if uid else None
 
 
-def create_socket_app(*, cors_allowed_origins: list[str] | str):
+def create_socket_app(*, cors_allowed_origins: list[str] | str, other_asgi_app=None):
+    """
+    Returns an ASGI app that serves Socket.IO on `/socket.io`.
+
+    IMPORTANT: Do not mount this under `/socket.io` again, otherwise the path becomes
+    `/socket.io/socket.io` and browsers will fail to connect.
+    """
     sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins=cors_allowed_origins)
 
     connections_by_user: Dict[str, set[str]] = {}
@@ -137,5 +143,5 @@ def create_socket_app(*, cors_allowed_origins: list[str] | str):
             return
         await sio.emit("stop_typing", {"chatId": chat_id, "senderId": sender_id}, room=chat_room(chat_id), skip_sid=sid)
 
-    return socketio.ASGIApp(sio)
+    return socketio.ASGIApp(sio, other_asgi_app=other_asgi_app, socketio_path="socket.io")
 

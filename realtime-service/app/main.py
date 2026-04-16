@@ -43,6 +43,7 @@ async def favicon():
     return Response(status_code=204)
 
 
-socket_app = create_socket_app(cors_allowed_origins=cors_origins)
-app.mount("/socket.io", socket_app)
+# Serve Socket.IO at `/socket.io` alongside the FastAPI routes.
+# (Do NOT mount under `/socket.io`, Socket.IO already uses that path.)
+app = create_socket_app(cors_allowed_origins=cors_origins, other_asgi_app=app)
 
