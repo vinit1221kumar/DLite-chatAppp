@@ -63,6 +63,23 @@ export async function registerWithAuth({ username, email, password }) {
   }
   validateUsernameOrThrow(lower)
 
+  // If Supabase is configured, use it directly so the browser has a real session.
+  if (isSupabaseConfigured() && supabase) {
+    const { data, error } = await supabase.auth.signUp({
+      email: String(email || '').trim(),
+      password: String(password || ''),
+      options: {
+        data: { username: raw },
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
+    })
+    if (error) throw error
+    // signUp may return session null when email confirmation is required
+    const session = data?.session || null
+    const user = session?.user || data?.user || null
+    return parseAuthResponse({ accessToken: session?.access_token || null, user })
+  }
+
   // NOTE: Backend currently doesn’t enforce unique usernames. We return friendly client-side hints.
   // For now we generate suggestions locally if signup fails for any reason.
   try {
@@ -79,6 +96,22 @@ export async function registerWithAuth({ username, email, password }) {
 }
 
 export async function loginWithAuth({ email, password }) {
+  // Prefer Supabase session-based auth when configured.
+  if (isSupabaseConfigured() && supabase) {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: String(email || '').trim(),
+      password: String(password || ''),
+    })
+    if (error) throw error
+    const session = data?.session
+    if (!session) {
+      const err = new Error('Login failed.')
+      err.code = 'auth/invalid-credential'
+      throw err
+    }
+    return parseAuthResponse({ accessToken: session.access_token, user: session.user })
+  }
+
   const data = await requestJson('/auth/login', { method: 'POST', body: { email, password } })
   return parseAuthResponse(data)
 }
