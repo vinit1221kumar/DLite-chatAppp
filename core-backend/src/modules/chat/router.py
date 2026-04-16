@@ -7,7 +7,7 @@ from fastapi import APIRouter, Header, Request
 from fastapi.responses import JSONResponse
 
 from src.modules.auth.token import claims_user_id, validate_token
-from src.modules.chat.config import SUPABASE_URL, is_supabase_configured, sb_key, sb_service_role_key
+from src.modules.chat.config import SUPABASE_URL, SUPABASE_ANON_KEY, is_supabase_configured, sb_key, sb_service_role_key
 
 router = APIRouter()
 
@@ -37,6 +37,21 @@ def _sb_write_headers(extra: Optional[Dict[str, str]] = None) -> Dict[str, str]:
     return headers
 
 
+def _extract_bearer_token(authorization: Optional[str]) -> Optional[str]:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return None
+    return authorization.split(" ", 1)[1].strip()
+
+
+def _sb_anon_user_headers(access_token: str, extra: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+    # Use anon key + user access token so Supabase RLS policies are enforced.
+    key = (SUPABASE_ANON_KEY or "").strip()
+    headers = {"apikey": key, "authorization": f"Bearer {access_token}"}
+    if extra:
+        headers.update(extra)
+    return headers
+
+
 async def _require_user(authorization: Optional[str]) -> Optional[dict]:
     if not authorization or not authorization.lower().startswith("bearer "):
         return None
@@ -49,6 +64,7 @@ async def search_users(username: str = "", exclude: str = "", authorization: Opt
     user = await _require_user(authorization)
     if user is None:
         return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
+    access_token = _extract_bearer_token(authorization) or ""
 
     term = (username or "").strip()
     if not term:
@@ -68,7 +84,7 @@ async def search_users(username: str = "", exclude: str = "", authorization: Opt
         params["id"] = f"neq.{exclude}"
 
     async with httpx.AsyncClient(timeout=15.0) as client:
-        r = await client.get(url, headers=_sb_headers(), params=params)
+        r = await client.get(url, headers=_sb_anon_user_headers(access_token), params=params)
     if r.status_code >= 400:
         return JSONResponse(status_code=503, content={"success": False, "message": "User search is unavailable"})
 
@@ -80,6 +96,7 @@ async def list_my_groups(authorization: Optional[str] = Header(default=None)):
     user = await _require_user(authorization)
     if user is None:
         return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
+    access_token = _extract_bearer_token(authorization) or ""
     uid = claims_user_id(user)
     if not uid:
         return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
@@ -96,7 +113,7 @@ async def list_my_groups(authorization: Optional[str] = Header(default=None)):
         "limit": "100",
     }
     async with httpx.AsyncClient(timeout=20.0) as client:
-        r = await client.get(url, headers=_sb_headers(), params=params)
+        r = await client.get(url, headers=_sb_anon_user_headers(access_token), params=params)
     if r.status_code >= 400:
         return JSONResponse(status_code=503, content={"success": False, "message": "Groups are unavailable"})
 
@@ -182,6 +199,7 @@ async def list_group_members(chat_id: str, authorization: Optional[str] = Header
     user = await _require_user(authorization)
     if user is None:
         return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
+    access_token = _extract_bearer_token(authorization) or ""
     uid = claims_user_id(user)
     if not uid:
         return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
@@ -197,7 +215,7 @@ async def list_group_members(chat_id: str, authorization: Optional[str] = Header
         "limit": "200",
     }
     async with httpx.AsyncClient(timeout=20.0) as client:
-        r = await client.get(url, headers=_sb_headers(), params=params)
+        r = await client.get(url, headers=_sb_anon_user_headers(access_token), params=params)
     if r.status_code >= 400:
         return JSONResponse(status_code=503, content={"success": False, "message": "Could not load group members"})
 
@@ -263,6 +281,7 @@ async def get_messages(chat_id: str, authorization: Optional[str] = Header(defau
 
     if not is_supabase_configured():
         return {"success": True, "chatId": chat_id, "messages": []}
+    access_token = token
 
     url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/messages"
     params = {
@@ -272,7 +291,7 @@ async def get_messages(chat_id: str, authorization: Optional[str] = Header(defau
         "limit": "200",
     }
     async with httpx.AsyncClient(timeout=20.0) as client:
-        r = await client.get(url, headers=_sb_headers({"authorization": f"Bearer {sb_key()}"}), params=params)
+        r = await client.get(url, headers=_sb_anon_user_headers(access_token), params=params)
     if r.status_code >= 400:
         return JSONResponse(status_code=503, content={"success": False, "message": "Chat storage is unavailable"})
 
