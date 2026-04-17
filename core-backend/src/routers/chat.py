@@ -454,7 +454,7 @@ async def get_messages(chat_id: str, authorization: Optional[str] = Header(defau
 
     url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/messages"
     params = {
-        "select": "id,chat_id,sender_id,content,type,created_at",
+        "select": "id,chat_id,sender_id,content,type,is_deleted,deleted_at,deleted_by,created_at",
         "chat_id": f"eq.{chat_id}",
         "order": "created_at.asc",
         "limit": "200",
@@ -476,6 +476,198 @@ async def get_messages(chat_id: str, authorization: Optional[str] = Header(defau
         status = r.status_code if r.status_code in (400, 401, 403, 404, 406) else 503
         return JSONResponse(status_code=status, content={"success": False, "message": hint})
     return {"success": True, "chatId": chat_id, "messages": await safe_json_list(r)}
+
+
+@router.post("/messages/{message_id}/delete")
+async def delete_message_for_everyone(message_id: str, authorization: Optional[str] = Header(default=None)):
+    """
+    Soft-delete a message (delete for everyone).
+    """
+    require_supabase()
+    user, _access_token = await _require_user(authorization)
+    if not user:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
+    uid = str(user.get("id") or "").strip()
+    if not uid:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
+
+    if not SUPABASE_SERVICE_ROLE_KEY:
+        return JSONResponse(status_code=503, content={"success": False, "message": "SUPABASE_SERVICE_ROLE_KEY is required"})
+
+    base = SUPABASE_URL.rstrip("/")
+    msg_url = f"{base}/rest/v1/messages"
+    headers = postgrest_headers(use_service_role=True, extra={"prefer": "return=representation"})
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            # Ensure sender owns the message
+            r_get = await client.get(
+                msg_url,
+                headers=postgrest_headers(use_service_role=True),
+                params={"select": "id,sender_id,chat_id,is_deleted", "id": f"eq.{message_id}", "limit": "1"},
+            )
+            if r_get.status_code >= 400:
+                return JSONResponse(status_code=_status_map(r_get.status_code), content={"success": False, "message": _supabase_hint(r_get)})
+            rows = await safe_json_list(r_get)
+            msg = rows[0] if rows else None
+            if not msg:
+                return JSONResponse(status_code=404, content={"success": False, "message": "Message not found"})
+            if str(msg.get("sender_id") or "").strip() != uid:
+                return JSONResponse(status_code=403, content={"success": False, "message": "Not allowed"})
+            if msg.get("is_deleted") is True:
+                return {"success": True, "message": msg}
+
+            r_upd = await client.patch(
+                msg_url,
+                headers=headers,
+                params={"id": f"eq.{message_id}"},
+                json={"is_deleted": True, "deleted_by": uid, "deleted_at": "now()"},
+            )
+            if r_upd.status_code >= 400:
+                return JSONResponse(status_code=_status_map(r_upd.status_code), content={"success": False, "message": _supabase_hint(r_upd)})
+            updated = await safe_json_list(r_upd)
+            return {"success": True, "message": (updated[0] if updated else msg)}
+    except Exception as e:
+        return JSONResponse(status_code=503, content={"success": False, "message": _net_err_hint(e)})
+
+
+@router.get("/pins/{chat_id}")
+async def list_pins(chat_id: str, authorization: Optional[str] = Header(default=None)):
+    require_supabase()
+    user, access_token = await _require_user(authorization)
+    if not user or not access_token:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
+    uid = str(user.get("id") or "").strip()
+    if not uid:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
+
+    url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/pinned_messages"
+    params = {
+        "select": "chat_id,user_id,message_id,created_at,messages(id,content,sender_id,created_at,is_deleted)",
+        "chat_id": f"eq.{chat_id}",
+        "user_id": f"eq.{uid}",
+        "order": "created_at.desc",
+        "limit": "50",
+    }
+    headers = {"apikey": postgrest_headers(use_service_role=False).get("apikey", ""), "authorization": f"Bearer {access_token}"}
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            r = await client.get(url, headers=headers, params=params)
+    except Exception as e:
+        return JSONResponse(status_code=503, content={"success": False, "message": _net_err_hint(e)})
+    if r.status_code >= 400:
+        return JSONResponse(status_code=_status_map(r.status_code), content={"success": False, "message": _supabase_hint(r)})
+    rows = await safe_json_list(r)
+    pins = []
+    for row in rows:
+        m = (row or {}).get("messages") or {}
+        pins.append(
+            {
+                "messageId": row.get("message_id"),
+                "chatId": row.get("chat_id"),
+                "createdAt": row.get("created_at"),
+                "content": m.get("content") or "",
+            }
+        )
+    return {"success": True, "chatId": chat_id, "pins": pins}
+
+
+@router.post("/pins/{chat_id}/pin")
+async def pin_message(chat_id: str, req: Request, authorization: Optional[str] = Header(default=None)):
+    require_supabase()
+    user, access_token = await _require_user(authorization)
+    if not user or not access_token:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
+    uid = str(user.get("id") or "").strip()
+    if not uid:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
+
+    body = await req.json()
+    message_id = str((body or {}).get("messageId") or "").strip()
+    if not message_id:
+        return JSONResponse(status_code=400, content={"success": False, "message": "messageId is required"})
+
+    url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/pinned_messages"
+    headers = {"apikey": postgrest_headers(use_service_role=False).get("apikey", ""), "authorization": f"Bearer {access_token}", "content-type": "application/json", "prefer": "resolution=merge-duplicates,return=minimal"}
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            r = await client.post(url, headers=headers, json={"chat_id": chat_id, "user_id": uid, "message_id": message_id})
+    except Exception as e:
+        return JSONResponse(status_code=503, content={"success": False, "message": _net_err_hint(e)})
+    if r.status_code not in (200, 201, 204, 409):
+        return JSONResponse(status_code=_status_map(r.status_code), content={"success": False, "message": _supabase_hint(r)})
+    return {"success": True}
+
+
+@router.post("/pins/{chat_id}/unpin")
+async def unpin_message(chat_id: str, req: Request, authorization: Optional[str] = Header(default=None)):
+    require_supabase()
+    user, access_token = await _require_user(authorization)
+    if not user or not access_token:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
+    uid = str(user.get("id") or "").strip()
+    if not uid:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
+
+    body = await req.json()
+    message_id = str((body or {}).get("messageId") or "").strip()
+    if not message_id:
+        return JSONResponse(status_code=400, content={"success": False, "message": "messageId is required"})
+
+    url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/pinned_messages"
+    headers = {"apikey": postgrest_headers(use_service_role=False).get("apikey", ""), "authorization": f"Bearer {access_token}"}
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            r = await client.delete(
+                url,
+                headers=headers,
+                params={"chat_id": f"eq.{chat_id}", "user_id": f"eq.{uid}", "message_id": f"eq.{message_id}"},
+            )
+    except Exception as e:
+        return JSONResponse(status_code=503, content={"success": False, "message": _net_err_hint(e)})
+    if r.status_code not in (200, 201, 204):
+        return JSONResponse(status_code=_status_map(r.status_code), content={"success": False, "message": _supabase_hint(r)})
+    return {"success": True}
+
+
+@router.post("/reactions/toggle")
+async def toggle_reaction(req: Request, authorization: Optional[str] = Header(default=None)):
+    require_supabase()
+    user, access_token = await _require_user(authorization)
+    if not user or not access_token:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
+    uid = str(user.get("id") or "").strip()
+    if not uid:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
+
+    body = await req.json()
+    message_id = str((body or {}).get("messageId") or "").strip()
+    emoji = str((body or {}).get("emoji") or "").strip()
+    if not message_id or not emoji:
+        return JSONResponse(status_code=400, content={"success": False, "message": "messageId and emoji are required"})
+
+    url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/message_reactions"
+    headers = {"apikey": postgrest_headers(use_service_role=False).get("apikey", ""), "authorization": f"Bearer {access_token}", "content-type": "application/json"}
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            # Try delete first (toggle off)
+            r_del = await client.delete(
+                url,
+                headers=headers,
+                params={"message_id": f"eq.{message_id}", "user_id": f"eq.{uid}", "emoji": f"eq.{emoji}"},
+            )
+            if r_del.status_code in (200, 204):
+                return {"success": True, "active": False}
+            # If nothing deleted, insert
+            r_ins = await client.post(
+                url,
+                headers={**headers, "prefer": "resolution=merge-duplicates,return=minimal"},
+                json={"message_id": message_id, "user_id": uid, "emoji": emoji},
+            )
+    except Exception as e:
+        return JSONResponse(status_code=503, content={"success": False, "message": _net_err_hint(e)})
+    if r_ins.status_code not in (200, 201, 204, 409):
+        return JSONResponse(status_code=_status_map(r_ins.status_code), content={"success": False, "message": _supabase_hint(r_ins)})
+    return {"success": True, "active": True}
 
 
 @router.get("/debug/supabase")

@@ -191,9 +191,17 @@ export async function editDirectMessage() {
 }
 
 export async function deleteDirectMessage() {
-  const error = new Error('Deleting messages is disabled.')
-  error.code = 'feature/disabled'
-  throw error
+  const snapshot = await getCurrentAuthSnapshot()
+  if (!snapshot?.token) throw new Error('Not authenticated')
+  const messageId = String(arguments?.[0]?.messageId || arguments?.[0] || '').trim()
+  if (!messageId) throw new Error('messageId is required')
+  const res = await fetch(`${API_BASE_URL}/chat/messages/${encodeURIComponent(messageId)}/delete`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${snapshot.token}` },
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok || json?.success === false) throw new Error(json?.message || 'Could not delete message')
+  return json?.message
 }
 
 export async function hideDirectMessageForMe() {
@@ -348,7 +356,19 @@ export async function deleteGroupMessage() {
   return
 }
 export async function toggleDmReaction() {
-  return
+  const snapshot = await getCurrentAuthSnapshot()
+  if (!snapshot?.token) throw new Error('Not authenticated')
+  const messageId = String(arguments?.[0]?.messageId || arguments?.[0] || '').trim()
+  const emoji = String(arguments?.[0]?.emoji || arguments?.[1] || '').trim()
+  if (!messageId || !emoji) throw new Error('messageId and emoji are required')
+  const res = await fetch(`${API_BASE_URL}/chat/reactions/toggle`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${snapshot.token}` },
+    body: JSON.stringify({ messageId, emoji }),
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok || json?.success === false) throw new Error(json?.message || 'Could not react')
+  return json
 }
 export async function setDmTyping() {
   return
@@ -357,13 +377,77 @@ export function subscribeDmTyping() {
   return () => undefined
 }
 export async function pinDmMessage() {
-  return
+  const snapshot = await getCurrentAuthSnapshot()
+  if (!snapshot?.token) throw new Error('Not authenticated')
+  const peerId = String(arguments?.[0]?.peerId || '').trim()
+  const messageId = String(arguments?.[0]?.messageId || '').trim()
+  if (!peerId || !messageId) throw new Error('peerId and messageId are required')
+  const r = await fetch(`${API_BASE_URL}/chat/dm/ensure`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${snapshot.token}` },
+    body: JSON.stringify({ peerId }),
+  })
+  const j = await r.json().catch(() => ({}))
+  if (!r.ok || j?.success === false) throw new Error(j?.message || 'Could not open chat')
+  const chatId = String(j?.chatId || '').trim()
+  const res = await fetch(`${API_BASE_URL}/chat/pins/${encodeURIComponent(chatId)}/pin`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${snapshot.token}` },
+    body: JSON.stringify({ messageId }),
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok || json?.success === false) throw new Error(json?.message || 'Could not pin message')
+  return true
 }
 export async function unpinDmMessage() {
-  return
+  const snapshot = await getCurrentAuthSnapshot()
+  if (!snapshot?.token) throw new Error('Not authenticated')
+  const peerId = String(arguments?.[0]?.peerId || '').trim()
+  const messageId = String(arguments?.[0]?.messageId || '').trim()
+  if (!peerId || !messageId) throw new Error('peerId and messageId are required')
+  const r = await fetch(`${API_BASE_URL}/chat/dm/ensure`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${snapshot.token}` },
+    body: JSON.stringify({ peerId }),
+  })
+  const j = await r.json().catch(() => ({}))
+  if (!r.ok || j?.success === false) throw new Error(j?.message || 'Could not open chat')
+  const chatId = String(j?.chatId || '').trim()
+  const res = await fetch(`${API_BASE_URL}/chat/pins/${encodeURIComponent(chatId)}/unpin`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${snapshot.token}` },
+    body: JSON.stringify({ messageId }),
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok || json?.success === false) throw new Error(json?.message || 'Could not unpin message')
+  return true
 }
 export function subscribePinnedDmMessages() {
-  return () => undefined
+  const peerId = String(arguments?.[1] || '').trim()
+  const cb = typeof arguments?.[2] === 'function' ? arguments?.[2] : () => undefined
+  let disposed = false
+  ;(async () => {
+    const snapshot = await getCurrentAuthSnapshot().catch(() => null)
+    if (!snapshot?.token || !peerId) return
+    const r = await fetch(`${API_BASE_URL}/chat/dm/ensure`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${snapshot.token}` },
+      body: JSON.stringify({ peerId }),
+    })
+    const j = await r.json().catch(() => ({}))
+    if (!r.ok || j?.success === false) return
+    const chatId = String(j?.chatId || '').trim()
+    const res = await fetch(`${API_BASE_URL}/chat/pins/${encodeURIComponent(chatId)}`, {
+      headers: { Authorization: `Bearer ${snapshot.token}` },
+    })
+    const json = await res.json().catch(() => ({}))
+    if (disposed) return
+    if (!res.ok || json?.success === false) return
+    cb(json?.pins || [])
+  })()
+  return () => {
+    disposed = true
+  }
 }
 export function subscribeRecentDirectChats(_userId, callback) {
   callback([])

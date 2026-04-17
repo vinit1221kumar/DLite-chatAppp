@@ -53,7 +53,32 @@ create table if not exists public.messages (
   sender_id uuid not null references public.users(id) on delete cascade,
   content text not null,
   type text not null default 'text' check (type in ('text','image','video','file','audio')),
+  is_deleted boolean not null default false,
+  deleted_at timestamptz,
+  deleted_by uuid references public.users(id) on delete set null,
   created_at timestamptz not null default now()
+);
+
+-- =========================================
+-- MESSAGE REACTIONS
+-- =========================================
+create table if not exists public.message_reactions (
+  message_id uuid not null references public.messages(id) on delete cascade,
+  user_id uuid not null references public.users(id) on delete cascade,
+  emoji text not null,
+  created_at timestamptz not null default now(),
+  primary key (message_id, user_id, emoji)
+);
+
+-- =========================================
+-- PINNED MESSAGES (per user per chat)
+-- =========================================
+create table if not exists public.pinned_messages (
+  chat_id uuid not null references public.chats(id) on delete cascade,
+  user_id uuid not null references public.users(id) on delete cascade,
+  message_id uuid not null references public.messages(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (chat_id, user_id, message_id)
 );
 
 -- =========================================
@@ -94,6 +119,10 @@ create index if not exists idx_group_members_chat_id on public.group_members(cha
 
 create index if not exists idx_messages_chat_id_created_at on public.messages(chat_id, created_at desc);
 create index if not exists idx_messages_sender_id on public.messages(sender_id);
+create index if not exists idx_messages_not_deleted on public.messages(chat_id, created_at desc) where is_deleted = false;
+
+create index if not exists idx_reactions_message_id on public.message_reactions(message_id);
+create index if not exists idx_pins_chat_id on public.pinned_messages(chat_id);
 
 create index if not exists idx_reads_user_id on public.message_reads(user_id);
 create index if not exists idx_reads_read_at on public.message_reads(read_at desc);
@@ -138,6 +167,8 @@ for each row execute procedure public.handle_new_user();
 alter table public.users enable row level security;
 alter table public.chats enable row level security;
 alter table public.group_members enable row level security;
+alter table public.message_reactions enable row level security;
+alter table public.pinned_messages enable row level security;
 alter table public.messages enable row level security;
 alter table public.message_reads enable row level security;
 alter table public.typing_status enable row level security;
@@ -258,6 +289,47 @@ on public.messages
 for delete
 to authenticated
 using (auth.uid() = sender_id);
+
+-- Allow soft-delete (update) by sender only
+create policy "Update own messages"
+on public.messages
+for update
+to authenticated
+using (auth.uid() = sender_id)
+with check (auth.uid() = sender_id);
+
+-- =========================================
+-- REACTIONS POLICIES
+-- =========================================
+create policy "React in member chats"
+on public.message_reactions
+for all
+to authenticated
+using (
+  exists (
+    select 1 from public.messages m
+    where m.id = message_reactions.message_id
+      and public.is_chat_member(m.chat_id, auth.uid())
+  )
+)
+with check (
+  auth.uid() = user_id
+  and exists (
+    select 1 from public.messages m
+    where m.id = message_reactions.message_id
+      and public.is_chat_member(m.chat_id, auth.uid())
+  )
+);
+
+-- =========================================
+-- PINS POLICIES
+-- =========================================
+create policy "Pin in member chats"
+on public.pinned_messages
+for all
+to authenticated
+using (public.is_chat_member(pinned_messages.chat_id, auth.uid()) and auth.uid() = user_id)
+with check (public.is_chat_member(pinned_messages.chat_id, auth.uid()) and auth.uid() = user_id);
 
 -- =========================================
 -- MESSAGE READS POLICIES
