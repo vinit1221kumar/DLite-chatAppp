@@ -82,6 +82,21 @@ create table if not exists public.pinned_messages (
 );
 
 -- =========================================
+-- CHAT SETTINGS (per user per chat)
+-- Used for "Recent chats" (archived/locked/hidden + last_read_at)
+-- =========================================
+create table if not exists public.chat_settings (
+  chat_id uuid not null references public.chats(id) on delete cascade,
+  user_id uuid not null references public.users(id) on delete cascade,
+  archived boolean not null default false,
+  locked boolean not null default false,
+  hidden boolean not null default false,
+  last_read_at timestamptz,
+  updated_at timestamptz not null default now(),
+  primary key (chat_id, user_id)
+);
+
+-- =========================================
 -- MESSAGE READS
 -- =========================================
 create table if not exists public.message_reads (
@@ -123,6 +138,8 @@ create index if not exists idx_messages_not_deleted on public.messages(chat_id, 
 
 create index if not exists idx_reactions_message_id on public.message_reactions(message_id);
 create index if not exists idx_pins_chat_id on public.pinned_messages(chat_id);
+create index if not exists idx_chat_settings_user_id on public.chat_settings(user_id);
+create index if not exists idx_chat_settings_chat_id on public.chat_settings(chat_id);
 
 create index if not exists idx_reads_user_id on public.message_reads(user_id);
 create index if not exists idx_reads_read_at on public.message_reads(read_at desc);
@@ -169,6 +186,7 @@ alter table public.chats enable row level security;
 alter table public.group_members enable row level security;
 alter table public.message_reactions enable row level security;
 alter table public.pinned_messages enable row level security;
+alter table public.chat_settings enable row level security;
 alter table public.messages enable row level security;
 alter table public.message_reads enable row level security;
 alter table public.typing_status enable row level security;
@@ -330,6 +348,28 @@ for all
 to authenticated
 using (public.is_chat_member(pinned_messages.chat_id, auth.uid()) and auth.uid() = user_id)
 with check (public.is_chat_member(pinned_messages.chat_id, auth.uid()) and auth.uid() = user_id);
+
+-- =========================================
+-- CHAT SETTINGS POLICIES
+-- =========================================
+create policy "Chat settings read"
+on public.chat_settings
+for select
+to authenticated
+using (auth.uid() = user_id and public.is_chat_member(chat_settings.chat_id, auth.uid()));
+
+create policy "Chat settings write"
+on public.chat_settings
+for insert
+to authenticated
+with check (auth.uid() = user_id and public.is_chat_member(chat_settings.chat_id, auth.uid()));
+
+create policy "Chat settings update"
+on public.chat_settings
+for update
+to authenticated
+using (auth.uid() = user_id and public.is_chat_member(chat_settings.chat_id, auth.uid()))
+with check (auth.uid() = user_id and public.is_chat_member(chat_settings.chat_id, auth.uid()));
 
 -- =========================================
 -- MESSAGE READS POLICIES

@@ -450,8 +450,30 @@ export function subscribePinnedDmMessages() {
   }
 }
 export function subscribeRecentDirectChats(_userId, callback) {
-  callback([])
-  return () => undefined
+  const cb = typeof callback === 'function' ? callback : () => undefined
+  let disposed = false
+  let timer = null
+
+  const load = async () => {
+    const snapshot = await getCurrentAuthSnapshot().catch(() => null)
+    if (!snapshot?.token) return cb([])
+    const res = await fetch(`${API_BASE_URL}/chat/dm/recent`, { headers: { Authorization: `Bearer ${snapshot.token}` } })
+    const json = await res.json().catch(() => ({}))
+    if (disposed) return
+    if (!res.ok || json?.success === false) return cb([])
+    cb(json?.chats || [])
+  }
+
+  ;(async () => {
+    await load()
+    if (disposed) return
+    timer = setInterval(load, 8000)
+  })()
+
+  return () => {
+    disposed = true
+    if (timer) clearInterval(timer)
+  }
 }
 export function subscribeUserPresence(_userId, callback) {
   const peerId = String(arguments?.[0] || '').trim()
@@ -484,16 +506,50 @@ export function subscribeUserPresence(_userId, callback) {
   }
 }
 export async function markRecentDirectChatRead() {
-  return
+  const snapshot = await getCurrentAuthSnapshot()
+  if (!snapshot?.token) return
+  const threadId = String(arguments?.[1] || arguments?.[0]?.threadId || arguments?.[0] || '').trim()
+  if (!threadId) return
+  await fetch(`${API_BASE_URL}/chat/dm/recent/read`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${snapshot.token}` },
+    body: JSON.stringify({ threadId }),
+  }).catch(() => undefined)
 }
 export async function deleteRecentDirectChat() {
-  return
+  const snapshot = await getCurrentAuthSnapshot()
+  if (!snapshot?.token) return
+  const threadId = String(arguments?.[0]?.threadId || arguments?.[0] || '').trim()
+  if (!threadId) return
+  await fetch(`${API_BASE_URL}/chat/dm/recent/settings`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${snapshot.token}` },
+    body: JSON.stringify({ threadId, hidden: true }),
+  }).catch(() => undefined)
 }
 export async function setRecentDirectChatArchived() {
-  return
+  const snapshot = await getCurrentAuthSnapshot()
+  if (!snapshot?.token) return
+  const threadId = String(arguments?.[0]?.threadId || '').trim()
+  const archived = Boolean(arguments?.[0]?.archived)
+  if (!threadId) return
+  await fetch(`${API_BASE_URL}/chat/dm/recent/settings`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${snapshot.token}` },
+    body: JSON.stringify({ threadId, archived }),
+  }).catch(() => undefined)
 }
 export async function setRecentDirectChatLocked() {
-  return
+  const snapshot = await getCurrentAuthSnapshot()
+  if (!snapshot?.token) return
+  const threadId = String(arguments?.[0]?.threadId || '').trim()
+  const locked = Boolean(arguments?.[0]?.locked)
+  if (!threadId) return
+  await fetch(`${API_BASE_URL}/chat/dm/recent/settings`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${snapshot.token}` },
+    body: JSON.stringify({ threadId, locked }),
+  }).catch(() => undefined)
 }
 export async function setMyPresence() {
   return

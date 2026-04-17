@@ -52,6 +52,13 @@ def _dm_key(a: str, b: str) -> str:
     return f"dm:{x}:{y}"
 
 
+def _now_iso() -> str:
+    # PostgREST accepts ISO timestamps for timestamptz columns.
+    import datetime as _dt
+
+    return _dt.datetime.now(tz=_dt.timezone.utc).isoformat()
+
+
 @router.get("/users/search")
 async def search_users(username: str = "", exclude: str = "", authorization: Optional[str] = Header(default=None)):
     require_supabase()
@@ -272,6 +279,249 @@ async def ensure_dm(req: Request, authorization: Optional[str] = Header(default=
         return JSONResponse(status_code=503, content={"success": False, "message": _net_err_hint(e)})
 
     return {"success": True, "chatId": chat_id}
+
+
+@router.get("/dm/recent")
+async def list_recent_dms(authorization: Optional[str] = Header(default=None)):
+    """
+    Returns the "Recent chats" list for the current user (direct chats only).
+    Uses service role for aggregation but requires a valid user token.
+    """
+    require_supabase()
+    user, _access_token = await _require_user(authorization)
+    if not user:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
+    uid = str(user.get("id") or "").strip()
+    if not uid:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
+    if not SUPABASE_SERVICE_ROLE_KEY:
+        return JSONResponse(status_code=503, content={"success": False, "message": "SUPABASE_SERVICE_ROLE_KEY is required"})
+
+    base = SUPABASE_URL.rstrip("/")
+    gm_url = f"{base}/rest/v1/group_members"
+    chats_url = f"{base}/rest/v1/chats"
+    users_url = f"{base}/rest/v1/users"
+    settings_url = f"{base}/rest/v1/chat_settings"
+    msgs_url = f"{base}/rest/v1/messages"
+
+    try:
+        async with httpx.AsyncClient(timeout=25.0) as client:
+            # 1) Fetch direct chat ids where user is member
+            r_gm = await client.get(
+                gm_url,
+                headers=postgrest_headers(use_service_role=True),
+                params={"select": "chat_id", "user_id": f"eq.{uid}", "limit": "200"},
+            )
+            if r_gm.status_code >= 400:
+                return JSONResponse(status_code=_status_map(r_gm.status_code), content={"success": False, "message": _supabase_hint(r_gm)})
+            gm_rows = await safe_json_list(r_gm)
+            chat_ids = [str(r.get("chat_id") or "").strip() for r in gm_rows if str(r.get("chat_id") or "").strip()]
+            if not chat_ids:
+                return {"success": True, "chats": []}
+
+            # 2) Filter to direct chats
+            r_chats = await client.get(
+                chats_url,
+                headers=postgrest_headers(use_service_role=True),
+                params={"select": "id,type", "id": f"in.({','.join(chat_ids)})", "type": "eq.direct", "limit": "200"},
+            )
+            if r_chats.status_code >= 400:
+                return JSONResponse(status_code=_status_map(r_chats.status_code), content={"success": False, "message": _supabase_hint(r_chats)})
+            chats = await safe_json_list(r_chats)
+            direct_ids = [str(c.get("id") or "").strip() for c in chats if str(c.get("id") or "").strip()]
+            if not direct_ids:
+                return {"success": True, "chats": []}
+
+            # 3) For each direct chat, find the peer (other member)
+            r_peers = await client.get(
+                gm_url,
+                headers=postgrest_headers(use_service_role=True),
+                params={"select": "chat_id,user_id", "chat_id": f"in.({','.join(direct_ids)})", "limit": "400"},
+            )
+            if r_peers.status_code >= 400:
+                return JSONResponse(status_code=_status_map(r_peers.status_code), content={"success": False, "message": _supabase_hint(r_peers)})
+            peer_rows = await safe_json_list(r_peers)
+            members_by_chat: dict[str, list[str]] = {}
+            for row in peer_rows:
+                cid = str(row.get("chat_id") or "").strip()
+                mid = str(row.get("user_id") or "").strip()
+                if not cid or not mid:
+                    continue
+                members_by_chat.setdefault(cid, []).append(mid)
+
+            peer_ids: list[str] = []
+            peer_by_chat: dict[str, str] = {}
+            for cid in direct_ids:
+                members = [m for m in members_by_chat.get(cid, []) if m and m != uid]
+                peer = members[0] if members else ""
+                if peer:
+                    peer_by_chat[cid] = peer
+                    peer_ids.append(peer)
+
+            # 4) Fetch peer profiles (username) + settings (archived/locked/hidden/last_read_at)
+            profiles_by_id: dict[str, dict] = {}
+            if peer_ids:
+                r_users = await client.get(
+                    users_url,
+                    headers=postgrest_headers(use_service_role=True),
+                    params={"select": "id,username,avatar_url", "id": f"in.({','.join(sorted(set(peer_ids)))})", "limit": "200"},
+                )
+                if r_users.status_code >= 400:
+                    return JSONResponse(status_code=_status_map(r_users.status_code), content={"success": False, "message": _supabase_hint(r_users)})
+                for u in await safe_json_list(r_users):
+                    pid = str((u or {}).get("id") or "").strip()
+                    if pid:
+                        profiles_by_id[pid] = u or {}
+
+            r_set = await client.get(
+                settings_url,
+                headers=postgrest_headers(use_service_role=True),
+                params={"select": "chat_id,archived,locked,hidden,last_read_at", "user_id": f"eq.{uid}", "chat_id": f"in.({','.join(direct_ids)})", "limit": "200"},
+            )
+            settings_by_chat: dict[str, dict] = {}
+            if r_set.status_code < 400:
+                for s in await safe_json_list(r_set):
+                    cid = str((s or {}).get("chat_id") or "").strip()
+                    if cid:
+                        settings_by_chat[cid] = s or {}
+
+            # 5) Fetch last message per chat (cheap: query newest per chat separately)
+            items = []
+            for cid in direct_ids:
+                peer = peer_by_chat.get(cid, "")
+                prof = profiles_by_id.get(peer, {}) if peer else {}
+                s = settings_by_chat.get(cid, {}) or {}
+                if s.get("hidden") is True:
+                    continue
+
+                r_last = await client.get(
+                    msgs_url,
+                    headers=postgrest_headers(use_service_role=True),
+                    params={
+                        "select": "id,content,sender_id,created_at,is_deleted",
+                        "chat_id": f"eq.{cid}",
+                        "order": "created_at.desc",
+                        "limit": "1",
+                    },
+                )
+                if r_last.status_code >= 400:
+                    continue
+                last_rows = await safe_json_list(r_last)
+                last = last_rows[0] if last_rows else {}
+                last_msg = "" if not last else ("" if last.get("is_deleted") else (last.get("content") or ""))
+                last_at = last.get("created_at") or None
+
+                # unread count: count messages after last_read_at, not sent by uid
+                last_read = s.get("last_read_at") or "1970-01-01T00:00:00Z"
+                r_unread = await client.get(
+                    msgs_url,
+                    headers=postgrest_headers(use_service_role=True),
+                    params={
+                        "select": "id",
+                        "chat_id": f"eq.{cid}",
+                        "sender_id": f"neq.{uid}",
+                        "created_at": f"gt.{last_read}",
+                        "limit": "200",
+                    },
+                )
+                unread = 0
+                if r_unread.status_code < 400:
+                    unread = len(await safe_json_list(r_unread))
+
+                items.append(
+                    {
+                        "threadId": cid,
+                        "peerId": peer,
+                        "peerUsername": prof.get("username") or (peer[:6] + "…" if peer else ""),
+                        "lastMessage": last_msg,
+                        "lastAt": last_at,
+                        "unreadCount": unread,
+                        "archived": bool(s.get("archived")),
+                        "locked": bool(s.get("locked")),
+                    }
+                )
+
+            # Sort by lastAt desc, fallback stable
+            items.sort(key=lambda x: (x.get("lastAt") or ""), reverse=True)
+            return {"success": True, "chats": items[:60]}
+    except Exception as e:
+        return JSONResponse(status_code=503, content={"success": False, "message": _net_err_hint(e)})
+
+
+@router.post("/dm/recent/read")
+async def mark_recent_read(req: Request, authorization: Optional[str] = Header(default=None)):
+    require_supabase()
+    user, _access_token = await _require_user(authorization)
+    if not user:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
+    uid = str(user.get("id") or "").strip()
+    if not uid:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
+    if not SUPABASE_SERVICE_ROLE_KEY:
+        return JSONResponse(status_code=503, content={"success": False, "message": "SUPABASE_SERVICE_ROLE_KEY is required"})
+
+    body = await req.json()
+    chat_id = str((body or {}).get("threadId") or (body or {}).get("chatId") or "").strip()
+    if not chat_id:
+        return JSONResponse(status_code=400, content={"success": False, "message": "threadId is required"})
+
+    url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/chat_settings"
+    payload = {"chat_id": chat_id, "user_id": uid, "last_read_at": _now_iso(), "updated_at": _now_iso()}
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            r = await client.post(
+                url,
+                headers=postgrest_headers(use_service_role=True, extra={"prefer": "resolution=merge-duplicates,return=minimal"}),
+                json=payload,
+            )
+    except Exception as e:
+        return JSONResponse(status_code=503, content={"success": False, "message": _net_err_hint(e)})
+    if r.status_code not in (200, 201, 204, 409):
+        return JSONResponse(status_code=_status_map(r.status_code), content={"success": False, "message": _supabase_hint(r)})
+    return {"success": True}
+
+
+@router.post("/dm/recent/settings")
+async def set_recent_settings(req: Request, authorization: Optional[str] = Header(default=None)):
+    require_supabase()
+    user, _access_token = await _require_user(authorization)
+    if not user:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
+    uid = str(user.get("id") or "").strip()
+    if not uid:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
+    if not SUPABASE_SERVICE_ROLE_KEY:
+        return JSONResponse(status_code=503, content={"success": False, "message": "SUPABASE_SERVICE_ROLE_KEY is required"})
+
+    body = await req.json()
+    chat_id = str((body or {}).get("threadId") or (body or {}).get("chatId") or "").strip()
+    if not chat_id:
+        return JSONResponse(status_code=400, content={"success": False, "message": "threadId is required"})
+    archived = body.get("archived")
+    locked = body.get("locked")
+    hidden = body.get("hidden")
+
+    patch: dict[str, object] = {"chat_id": chat_id, "user_id": uid, "updated_at": _now_iso()}
+    if archived is not None:
+        patch["archived"] = bool(archived)
+    if locked is not None:
+        patch["locked"] = bool(locked)
+    if hidden is not None:
+        patch["hidden"] = bool(hidden)
+
+    url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/chat_settings"
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            r = await client.post(
+                url,
+                headers=postgrest_headers(use_service_role=True, extra={"prefer": "resolution=merge-duplicates,return=minimal"}),
+                json=patch,
+            )
+    except Exception as e:
+        return JSONResponse(status_code=503, content={"success": False, "message": _net_err_hint(e)})
+    if r.status_code not in (200, 201, 204, 409):
+        return JSONResponse(status_code=_status_map(r.status_code), content={"success": False, "message": _supabase_hint(r)})
+    return {"success": True}
 
 
 @router.get("/groups/{group_id}/members")
