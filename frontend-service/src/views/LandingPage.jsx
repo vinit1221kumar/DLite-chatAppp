@@ -7,7 +7,6 @@ import {
   LayoutDashboard,
   Lock,
   MessageCircle,
-  Phone,
   Radio,
   Sparkles,
   Users,
@@ -186,10 +185,6 @@ export default function LandingPage() {
                 Groups
               </span>
               <span className="badge inline-flex items-center gap-1.5">
-                <Phone className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-300" />
-                Calls
-              </span>
-              <span className="badge inline-flex items-center gap-1.5">
                 <Radio className="h-3.5 w-3.5 text-pink-600 dark:text-pink-300" />
                 WebSockets
               </span>
@@ -245,29 +240,6 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/5 sm:col-span-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Calls</div>
-                    <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">Session start / end — fast flow.</div>
-                  </div>
-                  <div className="badge">Live</div>
-                </div>
-                <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                  <div className="rounded-2xl border border-slate-200 bg-white p-3 dark:border-white/10 dark:bg-white/5">
-                    <div className="text-xs text-slate-500 dark:text-slate-400">Status</div>
-                    <div className="mt-1 text-sm text-slate-900 dark:text-slate-100">Connected</div>
-                  </div>
-                  <div className="rounded-2xl border border-slate-200 bg-white p-3 dark:border-white/10 dark:bg-white/5">
-                    <div className="text-xs text-slate-500 dark:text-slate-400">Latency</div>
-                    <div className="mt-1 text-sm text-slate-900 dark:text-slate-100">~42ms</div>
-                  </div>
-                  <div className="rounded-2xl border border-slate-200 bg-white p-3 dark:border-white/10 dark:bg-white/5">
-                    <div className="text-xs text-slate-500 dark:text-slate-400">Quality</div>
-                    <div className="mt-1 text-sm text-slate-900 dark:text-slate-100">HD</div>
-                  </div>
-                </div>
-              </div>
             </div>
           </motion.section>
         </div>
@@ -359,23 +331,6 @@ export default function LandingPage() {
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <motion.div
-              className="card flex items-start gap-4 p-5"
-              initial={{ opacity: 0, y: 12 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.45, delay: 0.1 }}
-            >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-emerald-600 dark:border-white/10 dark:bg-white/5 dark:text-emerald-200">
-                <Phone className="h-5 w-5" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-slate-900 dark:text-slate-100">Calls</h3>
-                <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-                  Start and end call sessions from the dashboard — a full video UI can plug in here later.
-                </p>
-              </div>
-            </motion.div>
             <motion.div
               className="card flex items-start gap-4 p-5"
               initial={{ opacity: 0, y: 12 }}

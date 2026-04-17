@@ -1394,30 +1394,7 @@ export default function ChatDashboardPage() {
                 className="hidden"
                 onChange={handleSelectMedia}
               />
-              <Button
-                type="button"
-                variant="secondary"
-                size="icon"
-                className="h-10 w-10 shrink-0"
-                disabled={!activeUserId.trim() || sendingMessage || isRecording}
-                onClick={() => mediaInputRef.current?.click()}
-                title="Share photo, video, or file"
-                aria-label="Share photo, video, or file"
-              >
-                <Paperclip className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                size="icon"
-                variant={isRecording ? 'default' : 'secondary'}
-                className={cn('h-10 w-10 shrink-0', isRecording && 'animate-pulse bg-red-500 hover:bg-red-600')}
-                disabled={!activeUserId.trim() || sendingMessage}
-                onClick={isRecording ? handleStopRecording : handleStartRecording}
-                title={isRecording ? 'Stop recording' : 'Record voice note'}
-                aria-label={isRecording ? 'Stop recording' : 'Record voice note'}
-              >
-                {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-              </Button>
+              {/* Media + voice notes are hidden in production until Storage is wired */}
               <input
                 className="input flex-1"
                 value={input}

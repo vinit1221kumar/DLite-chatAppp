@@ -7,6 +7,7 @@ import { Camera, KeyRound, Pencil, Trash2, X } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+// Photo upload is intentionally hidden in production until Storage is wired.
 import { clearUserProfilePhoto, setUserProfilePhoto } from '@/services/chatClient';
 
 /**
@@ -267,19 +268,6 @@ export function ProfileMenu() {
               className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-amber-950 hover:bg-amber-100 dark:text-slate-50 dark:hover:bg-navy-800/60"
               onClick={() => {
                 setMenuOpen(false);
-                setPhotoOpen(true);
-                setPhotoMsg('');
-              }}
-            >
-              <Camera className="h-4 w-4 shrink-0 opacity-80" />
-              Change photo
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-amber-950 hover:bg-amber-100 dark:text-slate-50 dark:hover:bg-navy-800/60"
-              onClick={() => {
-                setMenuOpen(false);
                 setPwdOpen(true);
                 setPwdMsg('');
               }}
@@ -290,53 +278,6 @@ export function ProfileMenu() {
           </div>
         )}
       </div>
-
-      {photoOpen && (
-        <Modal title="Profile photo" titleId="photo-modal-title" onClose={() => setPhotoOpen(false)}>
-          <div className="space-y-5">
-            <div className="flex flex-col items-center">
-              <div className="relative flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-amber-200/90 bg-gradient-to-br from-amber-400 to-amber-600 text-4xl font-bold text-white shadow-inner dark:border-navy-600/50">
-                {avatarUrl ? (
-                  <Image src={avatarUrl} alt="" fill unoptimized className="h-full w-full object-cover" />
-                ) : (
-                  <span aria-hidden>{initial}</span>
-                )}
-              </div>
-              <p className="mt-3 text-center text-sm font-medium text-amber-700 dark:text-sky-400">
-                {avatarUrl ? 'Current photo' : 'No photo yet'}
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-2 border-t border-amber-200/80 pt-4 dark:border-navy-700/50">
-              <Button
-                type="button"
-                variant="secondary"
-                className="w-full justify-start gap-2 font-medium"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Camera className="h-4 w-4 shrink-0 opacity-80" />
-                Change the photo
-              </Button>
-              {avatarUrl && (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="w-full justify-start gap-2 font-medium text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40"
-                  onClick={handleDeletePhoto}
-                >
-                  <Trash2 className="h-4 w-4 shrink-0 opacity-80" />
-                  Delete the photo
-                </Button>
-              )}
-              {photoMsg && (
-                <p className="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-800 dark:text-red-200">
-                  {photoMsg}
-                </p>
-              )}
-            </div>
-          </div>
-        </Modal>
-      )}
 
       {editOpen && (
         <Modal title="Edit profile" titleId="edit-profile-modal-title" onClose={() => setEditOpen(false)}>
