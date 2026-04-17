@@ -539,37 +539,57 @@ async def list_group_members(group_id: str, authorization: Optional[str] = Heade
     if not gid:
         return JSONResponse(status_code=400, content={"success": False, "message": "groupId is required"})
 
-    # We list using the caller token (RLS enforced). If their RLS is broken, they'll see a proper hint.
-    url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/group_members"
-    params = {
-        # Use explicit FK join name to avoid PostgREST "Could not find relationship" 400s.
-        # Default constraint name is typically `group_members_user_id_fkey`.
-        "select": "user_id,role,users:users!group_members_user_id_fkey(id,username,avatar_url,created_at)",
-        "chat_id": f"eq.{gid}",
-        "order": "created_at.asc",
-        "limit": "200",
-    }
-    headers = {"apikey": postgrest_headers(use_service_role=False).get("apikey", ""), "authorization": f"Bearer {access_token}"}
+    if not SUPABASE_SERVICE_ROLE_KEY:
+        return JSONResponse(status_code=503, content={"success": False, "message": "SUPABASE_SERVICE_ROLE_KEY is required"})
+
+    base = SUPABASE_URL.rstrip("/")
+    gm_url = f"{base}/rest/v1/group_members"
+    users_url = f"{base}/rest/v1/users"
+
     try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            r = await client.get(url, headers=headers, params=params)
+        async with httpx.AsyncClient(timeout=25.0) as client:
+            # 1) Fetch membership rows for this group (service role).
+            r_gm = await client.get(
+                gm_url,
+                headers=postgrest_headers(use_service_role=True),
+                params={"select": "user_id,role", "chat_id": f"eq.{gid}", "limit": "200"},
+            )
+            if r_gm.status_code >= 400:
+                return JSONResponse(status_code=_status_map(r_gm.status_code), content={"success": False, "message": _supabase_hint(r_gm)})
+            rows = await safe_json_list(r_gm)
+
+            # Enforce: caller must be a member
+            if not any(str((r or {}).get("user_id") or "").strip() == uid for r in rows):
+                return JSONResponse(status_code=403, content={"success": False, "message": "You are not a member of this group"})
+
+            user_ids = [str((r or {}).get("user_id") or "").strip() for r in rows if str((r or {}).get("user_id") or "").strip()]
+            profiles_by_id: dict[str, dict] = {}
+            if user_ids:
+                r_users = await client.get(
+                    users_url,
+                    headers=postgrest_headers(use_service_role=True),
+                    params={"select": "id,username,avatar_url,created_at", "id": f"in.({','.join(sorted(set(user_ids)))})", "limit": "200"},
+                )
+                if r_users.status_code >= 400:
+                    return JSONResponse(status_code=_status_map(r_users.status_code), content={"success": False, "message": _supabase_hint(r_users)})
+                for u in await safe_json_list(r_users):
+                    pid = str((u or {}).get("id") or "").strip()
+                    if pid:
+                        profiles_by_id[pid] = u or {}
+
+            members = []
+            for row in rows:
+                mid = str((row or {}).get("user_id") or "").strip()
+                members.append(
+                    {
+                        "userId": mid,
+                        "role": (row or {}).get("role") or "member",
+                        "user": profiles_by_id.get(mid) or {"id": mid, "username": None, "avatar_url": None, "created_at": None},
+                    }
+                )
+            return {"success": True, "groupId": gid, "members": members}
     except Exception as e:
         return JSONResponse(status_code=503, content={"success": False, "message": _net_err_hint(e)})
-    if r.status_code >= 400:
-        return JSONResponse(status_code=_status_map(r.status_code), content={"success": False, "message": _supabase_hint(r)})
-
-    rows = await safe_json_list(r)
-    members = []
-    for row in rows:
-        u = (row or {}).get("users") or {}
-        members.append(
-            {
-                "userId": row.get("user_id"),
-                "role": row.get("role") or "member",
-                "user": {"id": u.get("id"), "username": u.get("username"), "avatar_url": u.get("avatar_url"), "created_at": u.get("created_at")},
-            }
-        )
-    return {"success": True, "groupId": gid, "members": members}
 
 
 @router.post("/groups/{group_id}/members/add-by-username")
@@ -815,7 +835,7 @@ async def edit_message(message_id: str, req: Request, authorization: Optional[st
             if str(msg.get("sender_id") or "").strip() != uid:
                 return JSONResponse(status_code=403, content={"success": False, "message": "Not allowed"})
             if msg.get("is_deleted") is True:
-                return JSONResponse(status_code=409, content={"success": False, "message": "Message is deleted"})
+                return JSONResponse(status_code=409, content={"success": False, "message": "Message was deleted and cannot be edited"})
 
             r_upd = await client.patch(
                 msg_url,
