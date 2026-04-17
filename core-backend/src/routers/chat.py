@@ -187,12 +187,13 @@ async def ensure_group(req: Request, authorization: Optional[str] = Header(defau
             if not chat_id:
                 return JSONResponse(status_code=503, content={"success": False, "message": "Could not open group"})
 
-            r_member = await client.post(
+        r_member = await client.post(
                 gm_url,
                 headers=postgrest_headers(use_service_role=True, extra={"prefer": "resolution=merge-duplicates,return=minimal"}),
                 json={"chat_id": chat_id, "user_id": uid, "role": "owner"},
             )
-            if r_member.status_code not in (201, 204, 409):
+        # Some PostgREST setups return 200 for inserts depending on Prefer headers.
+        if r_member.status_code not in (200, 201, 204, 409):
                 return JSONResponse(status_code=_status_map(r_member.status_code), content={"success": False, "message": _supabase_hint(r_member)})
     except Exception as e:
         return JSONResponse(status_code=503, content={"success": False, "message": _net_err_hint(e)})
@@ -258,14 +259,14 @@ async def ensure_dm(req: Request, authorization: Optional[str] = Header(default=
                 headers=postgrest_headers(use_service_role=True, extra={"prefer": "resolution=merge-duplicates,return=minimal"}),
                 json={"chat_id": chat_id, "user_id": uid, "role": "member"},
             )
-            if r_m1.status_code not in (201, 204, 409):
+            if r_m1.status_code not in (200, 201, 204, 409):
                 return JSONResponse(status_code=_status_map(r_m1.status_code), content={"success": False, "message": _supabase_hint(r_m1)})
             r_m2 = await client.post(
                 gm_url,
                 headers=postgrest_headers(use_service_role=True, extra={"prefer": "resolution=merge-duplicates,return=minimal"}),
                 json={"chat_id": chat_id, "user_id": peer_id, "role": "member"},
             )
-            if r_m2.status_code not in (201, 204, 409):
+            if r_m2.status_code not in (200, 201, 204, 409):
                 return JSONResponse(status_code=_status_map(r_m2.status_code), content={"success": False, "message": _supabase_hint(r_m2)})
     except Exception as e:
         return JSONResponse(status_code=503, content={"success": False, "message": _net_err_hint(e)})
@@ -382,7 +383,7 @@ async def add_group_member_by_username(group_id: str, req: Request, authorizatio
             headers=postgrest_headers(use_service_role=True, extra={"prefer": "resolution=merge-duplicates,return=minimal"}),
             json={"chat_id": gid, "user_id": target_id, "role": "member"},
         )
-        if r_add.status_code not in (201, 204, 409):
+        if r_add.status_code not in (200, 201, 204, 409):
             return JSONResponse(status_code=_status_map(r_add.status_code), content={"success": False, "message": _supabase_hint(r_add)})
 
     return {"success": True, "member": {"userId": target_id, "role": "member", "user": target}}
