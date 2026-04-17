@@ -474,3 +474,46 @@ async def get_messages(chat_id: str, authorization: Optional[str] = Header(defau
         return JSONResponse(status_code=status, content={"success": False, "message": hint})
     return {"success": True, "chatId": chat_id, "messages": await safe_json_list(r)}
 
+
+@router.get("/debug/supabase")
+async def debug_supabase(authorization: Optional[str] = Header(default=None)):
+    """
+    Production-safe debugging endpoint:
+    - Requires a valid user access token (so it's not public)
+    - Does NOT return secrets
+    - Checks whether Supabase PostgREST is reachable and expected tables exist
+    """
+    require_supabase()
+    user, _access_token = await _require_user(authorization)
+    if not user:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
+
+    base = SUPABASE_URL.rstrip("/")
+    rest = f"{base}/rest/v1"
+
+    checks: Dict[str, Any] = {
+        "supabaseUrl": base,
+        "hasServiceRoleKey": bool(SUPABASE_SERVICE_ROLE_KEY),
+        "tables": {},
+    }
+
+    # Prefer service role to bypass RLS for existence checks.
+    headers = postgrest_headers(use_service_role=bool(SUPABASE_SERVICE_ROLE_KEY))
+
+    async def _check_table(name: str) -> Dict[str, Any]:
+        url = f"{rest}/{name}"
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                r = await client.get(url, headers=headers, params={"select": "*", "limit": "1"})
+        except Exception as e:
+            return {"ok": False, "status": 0, "message": _net_err_hint(e)}
+        if r.status_code >= 400:
+            return {"ok": False, "status": r.status_code, "message": _supabase_hint(r)}
+        return {"ok": True, "status": r.status_code}
+
+    for table in ("users", "chats", "group_members", "messages"):
+        checks["tables"][table] = await _check_table(table)
+
+    ok = all(bool((checks["tables"][t] or {}).get("ok")) for t in checks["tables"])
+    return JSONResponse(status_code=200 if ok else 503, content={"success": ok, "checks": checks})
+
