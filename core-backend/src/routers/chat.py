@@ -309,6 +309,14 @@ async def get_messages(chat_id: str, authorization: Optional[str] = Header(defau
     async with httpx.AsyncClient(timeout=20.0) as client:
         r = await client.get(url, headers=headers, params=params)
     if r.status_code >= 400:
-        return JSONResponse(status_code=503, content={"success": False, "message": "Chat storage is unavailable"})
+        upstream_text = (r.text or "").strip()
+        if len(upstream_text) > 300:
+            upstream_text = upstream_text[:300] + "…"
+        hint = f"Supabase error ({r.status_code})"
+        if upstream_text:
+            hint = f"{hint}: {upstream_text}"
+        # Pass through common auth/RLS/missing-table codes to make debugging + UI behavior sane.
+        status = r.status_code if r.status_code in (400, 401, 403, 404, 406) else 503
+        return JSONResponse(status_code=status, content={"success": False, "message": hint})
     return {"success": True, "chatId": chat_id, "messages": await safe_json_list(r)}
 
