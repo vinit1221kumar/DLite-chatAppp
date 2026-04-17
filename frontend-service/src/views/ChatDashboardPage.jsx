@@ -903,6 +903,7 @@ export default function ChatDashboardPage() {
                           alt=""
                           width={48}
                           height={48}
+                          unoptimized
                           className="h-12 w-12 rounded-2xl border border-amber-200/70 bg-amber-50 object-cover dark:border-navy-700/50 dark:bg-navy-900/40"
                           onError={() => setPeerAvatarFailed(true)}
                         />
