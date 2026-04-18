@@ -12,7 +12,7 @@ import { AuthCardBranding } from '@/components/AuthCardBranding';
 import { toAuthErrorMessage } from '@/lib/authErrors';
 
 const cardClass =
-  'w-full max-w-md rounded-3xl border border-slate-200/90 bg-white p-8 shadow-[0_25px_80px_-24px_rgba(15,23,42,0.18)] dark:border-slate-800 dark:bg-slate-900 dark:shadow-black/40';
+  'w-full max-w-md rounded-3xl border border-ui-border bg-ui-panel p-8 shadow-[0_25px_80px_-24px_rgba(15,23,42,0.12)] dark:shadow-black/45';
 
 export default function RegisterPage() {
   const { register, loginWithGoogle, isAuthenticated, user, loading: authLoading, logout } = useAuth();
@@ -58,7 +58,7 @@ export default function RegisterPage() {
 
   if (authLoading) {
     return (
-      <div className="app-shell flex min-h-[100dvh] flex-col bg-[#F3F4F6] dark:bg-slate-950">
+      <div className="app-shell flex min-h-[100dvh] flex-col bg-ui-canvas">
         <main className="flex flex-1 items-center justify-center p-4 sm:p-6">
           <div className={cardClass}>
             <AuthCardBranding />
@@ -71,7 +71,7 @@ export default function RegisterPage() {
 
   if (isAuthenticated) {
     return (
-      <div className="app-shell relative flex min-h-[100dvh] flex-col bg-[#F3F4F6] dark:bg-slate-950">
+      <div className="app-shell relative flex min-h-[100dvh] flex-col bg-ui-canvas">
         <div className="absolute right-3 top-3 z-10 sm:right-6 sm:top-6">
           <AppHeaderMenu menuLinks={[{ href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard }]} />
         </div>
@@ -88,7 +88,7 @@ export default function RegisterPage() {
               <span className="font-semibold text-slate-900 dark:text-slate-100">{user?.username}</span>
             </p>
             <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-              <Button asChild className="w-full bg-sky-600 hover:bg-sky-700 sm:flex-1">
+              <Button asChild className="w-full sm:flex-1">
                 <Link href="/dashboard">
                   <LayoutDashboard className="mr-2 h-4 w-4" />
                   Dashboard
@@ -99,7 +99,7 @@ export default function RegisterPage() {
               </Button>
             </div>
             <p className="mt-5 text-center text-sm text-slate-500 dark:text-slate-400">
-              <Link href="/" className="text-sky-600 hover:underline dark:text-sky-400">
+              <Link href="/" className="font-medium text-ui-link hover:underline">
                 Home
               </Link>
             </p>
@@ -110,7 +110,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="app-shell relative flex min-h-[100dvh] flex-col bg-[#F3F4F6] dark:bg-slate-950">
+    <div className="app-shell relative flex min-h-[100dvh] flex-col bg-ui-canvas">
       <div className="absolute right-3 top-3 z-10 sm:right-6 sm:top-6">
         <AppHeaderMenu showLogout={false} menuLinks={[]} collapseActionsInMenu showChatsInCollapsedMenu={false} />
       </div>
@@ -149,15 +149,15 @@ export default function RegisterPage() {
               autoComplete="new-password"
             />
 
-            <Button className="w-full bg-sky-600 hover:bg-sky-700" type="submit" disabled={submitting}>
+            <Button className="w-full" type="submit" disabled={submitting}>
               <UserPlus className="mr-2 h-4 w-4" />
               {submitting ? 'Creating…' : 'Register'}
             </Button>
 
             <div className="flex items-center gap-2 py-1">
-              <div className="h-px flex-1 bg-slate-200 dark:bg-white/10" />
+              <div className="h-px flex-1 bg-ui-border" />
               <span className="text-[10px] uppercase tracking-wide text-slate-500">or</span>
-              <div className="h-px flex-1 bg-slate-200 dark:bg-white/10" />
+              <div className="h-px flex-1 bg-ui-border" />
             </div>
 
             <Button
@@ -197,7 +197,7 @@ export default function RegisterPage() {
 
           <p className="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">
             Have an account?{' '}
-            <Link href="/login" className="font-semibold text-sky-600 hover:underline dark:text-sky-400">
+            <Link href="/login" className="font-semibold text-ui-link hover:underline">
               Sign in
             </Link>
           </p>

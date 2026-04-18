@@ -20,7 +20,7 @@ const linkInactiveH =
   'flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 transition hover:bg-ui-muted hover:text-ui-accent dark:text-slate-400';
 
 const linkActiveH =
-  'flex h-10 w-10 items-center justify-center rounded-xl bg-ui-accent text-ui-on-accent shadow-sm shadow-teal-900/12 dark:shadow-black/25';
+  'flex h-10 w-10 items-center justify-center rounded-xl bg-ui-accent text-ui-on-accent shadow-sm shadow-violet-900/15 dark:shadow-black/25';
 
 const linkInactiveV =
   'flex h-10 w-10 items-center justify-center rounded-xl text-ui-rail-fg-muted transition hover:bg-ui-muted hover:text-ui-accent dark:hover:bg-white/10 dark:hover:text-ui-rail-fg';

@@ -24,10 +24,10 @@ import { cn } from '@/lib/utils';
 const dashboardCtaClass = (compact) =>
   cn(
     'anim-shimmer relative overflow-hidden font-semibold tracking-wide',
-    'shadow-[0_12px_40px_-14px_rgba(124,58,237,0.45)] ring-2 ring-violet-400/50 ring-offset-2 ring-offset-white',
-    'transition hover:brightness-[1.03] hover:shadow-[0_18px_48px_-12px_rgba(124,58,237,0.5)]',
-    'dark:shadow-[0_12px_40px_-14px_rgba(139,92,246,0.35)] dark:ring-violet-500/35 dark:ring-offset-slate-950',
-    'dark:hover:shadow-[0_18px_52px_-10px_rgba(167,139,250,0.35)]',
+    'bg-gradient-to-r from-ui-grad-from to-ui-grad-to text-white',
+    'shadow-[0_12px_40px_-14px_rgba(15,23,42,0.18)] ring-2 ring-[var(--ui-accent)]/45 ring-offset-2 ring-offset-white',
+    'transition hover:brightness-[1.05] hover:shadow-[0_18px_48px_-12px_rgba(15,23,42,0.2)]',
+    'dark:ring-[var(--ui-accent)]/35 dark:ring-offset-slate-950',
     compact ? 'px-4 py-2.5 text-sm' : 'px-7 py-3 text-base'
   );
 
@@ -60,7 +60,7 @@ export default function LandingPage() {
       </div>
 
       {/* Sticky glass header */}
-      <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/90">
+      <header className="sticky top-0 z-50 border-b border-ui-border bg-ui-shell/95 backdrop-blur-xl dark:bg-ui-shell/95">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4">
           <AppBrandRow asHomeLink />
 

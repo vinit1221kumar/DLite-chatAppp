@@ -34,6 +34,7 @@ import { Download, Upload, BellOff, Camera, Loader2, LogOut, MessageSquare, More
 import { Button } from '@/components/ui/button';
 import { ChatAppShell } from '@/components/ChatAppShell';
 import { ChatAppIconRail } from '@/components/ChatAppIconRail';
+import { ChatAppTopBar } from '@/components/ChatAppTopBar';
 import { cn } from '@/lib/utils';
 
 function formatGroupMessageTime(ts) {
@@ -812,13 +813,12 @@ export default function GroupChatPage() {
 
   return (
     <>
-      <ChatAppShell gridClassName="grid-cols-1 lg:grid-cols-[64px_minmax(280px,340px)_1fr]">
-        <nav className="hidden min-h-0 lg:flex" aria-label="Primary">
-          <ChatAppIconRail variant="vertical" active="groups" dmUnreadCount={dmUnreadTotal} />
-        </nav>
-
+      <ChatAppShell
+        topBar={<ChatAppTopBar />}
+        gridClassName="grid-cols-1 lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)]"
+      >
         <aside className="flex max-h-[42vh] min-h-0 flex-col border-b border-ui-border bg-ui-sidebar lg:max-h-none lg:border-b-0 lg:border-r">
-          <div className="shrink-0 lg:hidden">
+          <div className="shrink-0 border-b border-ui-border">
             <ChatAppIconRail active="groups" dmUnreadCount={dmUnreadTotal} />
           </div>
 
@@ -832,7 +832,7 @@ export default function GroupChatPage() {
                 type="button"
                 variant={groupSearchOpen ? 'default' : 'secondary'}
                 size="icon"
-                className="h-9 w-9 shrink-0 rounded-full bg-ui-accent text-ui-on-accent shadow-md hover:bg-ui-accent-hover"
+                className={cn('h-9 w-9 shrink-0 rounded-full shadow-md', groupSearchOpen && 'hover:brightness-110')}
                 aria-expanded={groupSearchOpen}
                 aria-label="Open or create group"
                 onClick={() => setGroupSearchOpen((o) => !o)}
@@ -848,7 +848,7 @@ export default function GroupChatPage() {
               >
                 Personal
               </Link>
-              <span className="flex-1 rounded-full bg-ui-accent px-2 py-2 text-center text-[11px] font-bold uppercase tracking-wide text-ui-on-accent shadow-sm sm:px-3">
+              <span className="flex-1 rounded-full bg-gradient-to-r from-ui-grad-from to-ui-grad-to px-2 py-2 text-center text-[11px] font-bold uppercase tracking-wide text-white shadow-sm sm:px-3">
                 Group
               </span>
             </div>
@@ -942,14 +942,21 @@ export default function GroupChatPage() {
                         setGroupInput(group.id);
                       }}
                       className={cn(
-                        'w-full rounded-xl border px-2.5 py-2 text-left text-xs font-medium transition',
+                        'w-full rounded-2xl border border-transparent px-2.5 py-2 text-left text-xs font-medium transition',
                         groupId.trim() === group.id
-                          ? 'border-ui-row-border bg-ui-row text-slate-900 dark:text-ui-accent-text'
+                          ? 'bg-ui-chat-active text-ui-chat-active-fg shadow-md'
                           : 'border-ui-border bg-ui-panel/70 text-slate-800 hover:bg-ui-muted dark:text-slate-100',
                       )}
                     >
                       <div>Group {group.id}</div>
-                      <div className="text-[11px] opacity-80">{group.memberCount} members</div>
+                      <div
+                        className={cn(
+                          'text-[11px]',
+                          groupId.trim() === group.id ? 'text-[var(--ui-chat-active-muted)]' : 'opacity-80',
+                        )}
+                      >
+                        {group.memberCount} members
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -1043,7 +1050,7 @@ export default function GroupChatPage() {
                   {groupMenuOpen && (
                     <div
                       role="menu"
-                      className="anim-pop absolute right-0 top-full z-40 mt-1.5 min-w-[200px] overflow-hidden rounded-xl border border-slate-200/90 bg-white py-1.5 shadow-xl shadow-slate-900/10 dark:border-slate-700 dark:bg-slate-950"
+                      className="anim-pop absolute right-0 top-full z-40 mt-1.5 min-w-[200px] overflow-hidden rounded-xl border border-ui-border bg-ui-panel py-1.5 shadow-xl dark:shadow-black/40"
                     >
                       <button
                         type="button"
@@ -1250,7 +1257,7 @@ export default function GroupChatPage() {
                 <button
                   type="submit"
                   disabled={!groupId || !message.trim() || !isMember || sending}
-                  className="mb-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-ui-accent text-ui-on-accent shadow-md transition hover:bg-ui-accent-hover disabled:cursor-not-allowed disabled:opacity-45"
+                  className="mb-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-ui-grad-from to-ui-grad-to text-white shadow-md transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45"
                   aria-label="Send"
                 >
                   {sending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}

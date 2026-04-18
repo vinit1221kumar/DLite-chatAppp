@@ -847,7 +847,10 @@ export default function CallUI({
             <button
               type="button"
               onClick={toggleScreenShare}
-              className={cn("flex h-14 w-14 items-center justify-center rounded-full text-white transition-colors", isScreenSharing ? "bg-sky-500 hover:bg-sky-600" : "bg-white/20 hover:bg-white/30")}
+              className={cn(
+                "flex h-14 w-14 items-center justify-center rounded-full text-white transition-colors",
+                isScreenSharing ? "bg-ui-accent hover:brightness-110" : "bg-white/20 hover:bg-white/30",
+              )}
               aria-label={isScreenSharing ? "Stop sharing" : "Share screen"}
             >
               {isScreenSharing ? <MonitorOff className="h-6 w-6" /> : <Monitor className="h-6 w-6" />}
@@ -874,7 +877,7 @@ export default function CallUI({
       >
         {isEnhanced ? (
           <>
-            <div className="anim-glow pointer-events-none absolute -right-8 top-0 h-28 w-28 rounded-full bg-amber-300/30 dark:bg-sky-500/15" />
+            <div className="anim-glow pointer-events-none absolute -right-8 top-0 h-28 w-28 rounded-full bg-amber-300/30 dark:bg-ui-accent/15" />
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <div className="badge mb-2 inline-flex">
@@ -1072,7 +1075,10 @@ export default function CallUI({
           variant="secondary"
           onClick={toggleScreenShare}
           disabled={status !== "connected" || !isVideoMode}
-          className={cn(isEnhanced && "rounded-2xl px-5", isScreenSharing && "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300")}
+          className={cn(
+            isEnhanced && "rounded-2xl px-5",
+            isScreenSharing && "border-ui-accent/35 bg-ui-accent-subtle text-ui-accent-text dark:text-ui-accent-text",
+          )}
         >
           {isScreenSharing ? <MonitorOff className="mr-2 h-4 w-4" /> : <Monitor className="mr-2 h-4 w-4" />}
           {isScreenSharing ? "Stop share" : "Share screen"}
@@ -1087,7 +1093,7 @@ export default function CallUI({
 
       <div className={panelClassName}>
         {isEnhanced && (
-          <div className="pointer-events-none absolute right-0 top-0 h-20 w-20 rounded-full bg-amber-300/15 blur-2xl dark:bg-sky-500/10" />
+          <div className="pointer-events-none absolute right-0 top-0 h-20 w-20 rounded-full bg-amber-300/15 blur-2xl dark:bg-ui-accent/10" />
         )}
         <div className="grid gap-3 sm:grid-cols-4">
           <div className="rounded-2xl border border-amber-200/60 bg-amber-50/70 px-4 py-3 dark:border-navy-700/50 dark:bg-navy-900/50">

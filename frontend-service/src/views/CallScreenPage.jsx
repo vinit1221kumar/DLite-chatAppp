@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useState } from 'react';
 import { ChatAppShell } from '@/components/ChatAppShell';
 import { ChatAppIconRail } from '@/components/ChatAppIconRail';
+import { ChatAppTopBar } from '@/components/ChatAppTopBar';
 import { useAuth } from '@/hooks/useAuth';
 import { subscribeRecentDirectChats } from '@/services/chatClient';
 
@@ -36,22 +37,21 @@ export default function CallScreenPage() {
   }, [user?.id]);
 
   return (
-    <ChatAppShell gridClassName="grid-cols-1 lg:grid-cols-[64px_minmax(280px,340px)_1fr]">
-      <nav className="hidden min-h-0 lg:flex" aria-label="Primary">
-        <ChatAppIconRail variant="vertical" active="call" dmUnreadCount={dmUnreadTotal} />
-      </nav>
-
-      <aside className="flex max-h-[40vh] min-h-0 flex-col border-b border-slate-200/80 bg-[#F7F8FA] dark:border-slate-800 dark:bg-slate-900/90 lg:max-h-none lg:border-b-0 lg:border-r">
-        <div className="shrink-0 lg:hidden">
+    <ChatAppShell
+      topBar={<ChatAppTopBar />}
+      gridClassName="grid-cols-1 lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)]"
+    >
+      <aside className="flex max-h-[40vh] min-h-0 flex-col border-b border-ui-border bg-ui-sidebar lg:max-h-none lg:border-b-0 lg:border-r">
+        <div className="shrink-0 border-b border-ui-border">
           <ChatAppIconRail active="call" dmUnreadCount={dmUnreadTotal} />
         </div>
-        <div className="shrink-0 border-b border-slate-200/80 px-3 pb-3 pt-3 dark:border-slate-800">
+        <div className="shrink-0 border-b border-ui-border px-4 pb-3 pt-3">
           <h2 className="text-base font-bold tracking-tight text-slate-900 dark:text-slate-100">Calls</h2>
           <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">Voice or video with another signed-in user.</p>
         </div>
       </aside>
 
-      <section className="flex min-h-0 flex-1 flex-col overflow-hidden border-b border-slate-200/80 bg-white dark:border-slate-800 dark:bg-slate-900 lg:border-b-0">
+      <section className="flex min-h-0 flex-1 flex-col overflow-hidden border-b border-ui-border bg-ui-panel lg:border-b-0">
         <CallUI
           defaultMode="audio"
           title="Voice and video"
