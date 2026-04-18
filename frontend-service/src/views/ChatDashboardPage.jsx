@@ -34,13 +34,11 @@ import {
   unpinDmMessage,
   subscribePinnedDmMessages
 } from '../services/chatClient';
-import { motion } from 'framer-motion';
 import {
   Loader2,
   Lock,
   Archive,
   Download,
-  Mail,
   MessageCircle,
   Mic,
   MicOff,
@@ -56,13 +54,12 @@ import {
   Send,
   SmilePlus,
   Trash2,
-  Users,
   Video,
   X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { ProfileMenu } from '@/components/ProfileMenu';
-import { AppHeaderMenu } from '@/components/AppHeaderMenu';
+import { ChatAppShell } from '@/components/ChatAppShell';
+import { ChatAppIconRail } from '@/components/ChatAppIconRail';
 
 function sameCalendarDay(aMs, bMs) {
   const da = new Date(aMs);
@@ -1017,63 +1014,9 @@ export default function ChatDashboardPage() {
   };
 
   return (
-    <div className="flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-[#F3F4F6] dark:bg-slate-950">
-      <motion.main
-        className="flex min-h-0 flex-1 flex-col overflow-hidden p-2 sm:p-4"
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.2, ease: [0.2, 0.9, 0.2, 1] }}
-      >
-        <div
-          className={cn(
-            'mx-auto grid min-h-0 w-full max-w-[1660px] flex-1 overflow-hidden rounded-3xl border border-slate-200/90 bg-white shadow-[0_25px_80px_-24px_rgba(15,23,42,0.18)]',
-            'dark:border-slate-800 dark:bg-slate-900 dark:shadow-black/40',
-            'grid-cols-1 lg:grid-cols-[minmax(300px,360px)_1fr] xl:grid-cols-[minmax(300px,360px)_1fr_minmax(272px,300px)]'
-          )}
-        >
-          <aside className="flex max-h-[42vh] min-h-0 flex-col border-b border-slate-200/80 bg-[#F9FAFB] dark:border-slate-800 dark:bg-slate-900/80 lg:max-h-none lg:border-b-0 lg:border-r">
-            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200/80 px-3 py-2.5 dark:border-slate-800">
-              <div className="flex items-center gap-0.5 sm:gap-1">
-                <Link
-                  href="/dashboard"
-                  className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-violet-600 text-white shadow-sm shadow-violet-600/25"
-                  title="Chats"
-                  aria-current="page"
-                >
-                  <MessageCircle className="h-5 w-5" />
-                  {dmUnreadTotal > 0 ? (
-                    <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white">
-                      {dmUnreadTotal > 9 ? '9+' : dmUnreadTotal}
-                    </span>
-                  ) : null}
-                </Link>
-                <Link
-                  href="/call"
-                  className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 transition hover:bg-white hover:text-violet-600 dark:text-slate-400 dark:hover:bg-slate-800"
-                  title="Calls"
-                >
-                  <Phone className="h-5 w-5" />
-                </Link>
-                <span
-                  className="relative flex h-10 w-10 cursor-not-allowed items-center justify-center rounded-xl text-slate-300 dark:text-slate-600"
-                  title="Mail — coming soon"
-                >
-                  <Mail className="h-5 w-5" />
-                  <span className="absolute -right-0.5 top-0.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-[#F9FAFB] dark:ring-slate-900" />
-                </span>
-                <Link
-                  href="/groups"
-                  className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 transition hover:bg-white hover:text-violet-600 dark:text-slate-400 dark:hover:bg-slate-800"
-                  title="Groups"
-                >
-                  <Users className="h-5 w-5" />
-                </Link>
-              </div>
-              <div className="flex items-center gap-0.5">
-                <AppHeaderMenu menuLinks={[]} />
-                <ProfileMenu />
-              </div>
-            </div>
+    <ChatAppShell gridClassName="grid-cols-1 lg:grid-cols-[minmax(300px,360px)_1fr] xl:grid-cols-[minmax(300px,360px)_1fr_minmax(272px,300px)]">
+      <aside className="flex max-h-[42vh] min-h-0 flex-col border-b border-slate-200/80 bg-[#F9FAFB] dark:border-slate-800 dark:bg-slate-900/80 lg:max-h-none lg:border-b-0 lg:border-r">
+        <ChatAppIconRail active="dm" dmUnreadCount={dmUnreadTotal} />
 
             <div
               ref={searchWrapRef}
@@ -1802,8 +1745,6 @@ export default function ChatDashboardPage() {
               </ul>
             </div>
           </aside>
-        </div>
-      </motion.main>
-    </div>
+    </ChatAppShell>
   );
 }

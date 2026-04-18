@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useAuth } from '../hooks/useAuth';
@@ -25,12 +26,13 @@ import {
   subscribeGroupTyping,
   pinGroupMessage,
   unpinGroupMessage,
-  subscribePinnedGroupMessages
+  subscribePinnedGroupMessages,
+  subscribeRecentDirectChats
 } from '../services/chatClient';
-import { motion } from 'framer-motion';
 import { Download, Upload, BellOff, Camera, LogOut, MessageSquare, MoreVertical, Pin, PinOff, Search, Send, SmilePlus, Trash2, UserPlus, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { AppMainHeader } from '@/components/AppMainHeader';
+import { ChatAppShell } from '@/components/ChatAppShell';
+import { ChatAppIconRail } from '@/components/ChatAppIconRail';
 import { cn } from '@/lib/utils';
 
 export default function GroupChatPage() {
@@ -78,6 +80,12 @@ export default function GroupChatPage() {
   const groupPhotoInputRef = useRef(null);
   const messagesWrapRef = useRef(null);
   const shouldAutoScrollRef = useRef(true);
+
+  const [dmRecentChats, setDmRecentChats] = useState([]);
+  const dmUnreadTotal = useMemo(
+    () => dmRecentChats.reduce((s, c) => s + Number(c.unreadCount || 0), 0),
+    [dmRecentChats]
+  );
 
   const groupMsgSearchLower = useMemo(() => groupMsgSearch.trim().toLowerCase(), [groupMsgSearch]);
   const deferredGroupMsgSearchLower = useDeferredValue(groupMsgSearchLower);
@@ -267,6 +275,18 @@ export default function GroupChatPage() {
     onScroll();
     return () => el.removeEventListener('scroll', onScroll);
   }, []);
+
+  useEffect(() => {
+    let unsubscribe = () => undefined;
+    try {
+      unsubscribe = subscribeRecentDirectChats(user?.id, (items) => {
+        setDmRecentChats(items);
+      });
+    } catch {
+      /* ignore */
+    }
+    return () => unsubscribe();
+  }, [user?.id]);
 
   const getMemberLabel = useCallback((member) => {
     if (member.id === user?.id) {
@@ -736,43 +756,22 @@ export default function GroupChatPage() {
   };
 
   return (
-    <div className="flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-[#F3F4F6] dark:bg-slate-950">
-      <AppMainHeader />
+    <>
+      <ChatAppShell gridClassName="grid-cols-1 lg:grid-cols-[minmax(300px,360px)_1fr]">
+        <aside className="flex max-h-[42vh] min-h-0 flex-col border-b border-slate-200/80 bg-[#F9FAFB] dark:border-slate-800 dark:bg-slate-900/80 lg:max-h-none lg:border-b-0 lg:border-r">
+          <ChatAppIconRail active="groups" dmUnreadCount={dmUnreadTotal} />
 
-      <motion.main
-        className="flex min-h-0 flex-1 flex-col overflow-hidden px-2 pb-2 pt-2 sm:px-4 sm:pb-4"
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.2, ease: [0.2, 0.9, 0.2, 1] }}
-      >
-        <div className="anim-fade-up mb-3 flex shrink-0 items-start justify-between gap-3 rounded-2xl border border-slate-200/80 bg-gradient-to-r from-violet-50/90 to-slate-50/90 px-3 py-2.5 dark:border-slate-800 dark:from-slate-900/80 dark:to-slate-950/90 sm:px-4 sm:py-3">
-          <div className="min-w-0 flex-1">
-            <div className="badge mb-1 inline-block">Group chat</div>
-            <p className="text-xs text-slate-800/90 dark:text-slate-100/90 sm:text-sm">
-              Open a group, add users by <span className="font-semibold">username</span>, and chat with all members.
-            </p>
-          </div>
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200/80 bg-violet-50/90 text-violet-700 dark:border-slate-700 dark:bg-slate-900/80 dark:text-violet-300">
-            <Users className="h-5 w-5" />
-          </div>
-        </div>
-
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-[minmax(260px,340px)_minmax(0,1fr)] lg:grid-rows-1 lg:items-stretch lg:gap-5">
-        <aside className="card anim-fade-up flex max-h-[38vh] min-h-0 flex-col overflow-visible p-0 [animation-delay:70ms] lg:max-h-none">
           <div
             ref={groupSearchWrapRef}
-            className="relative shrink-0 border-b border-slate-200/80 bg-slate-50/90 dark:border-slate-800 dark:bg-slate-900/80"
+            className="relative shrink-0 border-b border-slate-200/80 px-3 pb-3 pt-2 dark:border-slate-800"
           >
-            <div className="flex items-center justify-between gap-2 px-4 py-3">
-              <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
-                <Users className="h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />
-                Group
-              </div>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="text-lg font-bold tracking-tight text-slate-800 dark:text-slate-100">Groups</h2>
               <Button
                 type="button"
                 variant={groupSearchOpen ? 'default' : 'secondary'}
                 size="icon"
-                className="h-10 w-10 shrink-0 rounded-xl"
+                className="h-9 w-9 shrink-0 rounded-full bg-violet-600 text-white shadow-md shadow-violet-600/30 hover:bg-violet-700"
                 aria-expanded={groupSearchOpen}
                 aria-label="Set group ID"
                 onClick={() => setGroupSearchOpen((o) => !o)}
@@ -780,8 +779,25 @@ export default function GroupChatPage() {
                 <Search className="h-5 w-5" />
               </Button>
             </div>
+
+            <div className="mb-3 flex gap-4 border-b border-slate-200/80 pb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:text-slate-500">
+              <Link
+                href="/dashboard"
+                className="transition hover:text-violet-600 dark:hover:text-violet-400"
+              >
+                Direct
+              </Link>
+              <span className="relative text-violet-600 dark:text-violet-400">
+                Groups
+                <span className="absolute -right-2.5 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-red-500" />
+              </span>
+              <span className="cursor-not-allowed opacity-40" title="Coming soon">
+                Public
+              </span>
+            </div>
+
             {groupSearchOpen && (
-              <div className="anim-pop absolute left-4 right-4 top-full z-[60] mt-2 overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-3 shadow-xl dark:border-slate-700 dark:bg-slate-950">
+              <div className="anim-pop absolute left-3 right-3 top-full z-[60] mt-2 overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-3 shadow-xl dark:border-slate-700 dark:bg-slate-950">
                 <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:text-violet-400">
                   Group ID
                 </label>
@@ -825,7 +841,8 @@ export default function GroupChatPage() {
               </div>
             )}
           </div>
-          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-2 pb-3 pt-1 sm:px-3">
             {groupId.trim() ? (
               <div className="rounded-xl border border-slate-200/80 bg-slate-50/95 px-3 py-2 text-sm font-medium text-slate-900 dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-100">
                 <div>Current group</div>
@@ -926,7 +943,7 @@ export default function GroupChatPage() {
           </div>
         </aside>
 
-        <section className="card anim-fade-up flex min-h-0 flex-1 flex-col overflow-hidden [animation-delay:130ms]">
+        <section className="flex min-h-0 flex-1 flex-col overflow-hidden border-b border-slate-200/80 bg-white dark:border-slate-800 dark:bg-slate-900 lg:border-b-0">
           <div className="shrink-0 border-b border-slate-200/80 px-4 py-3 dark:border-slate-800">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -1170,8 +1187,7 @@ export default function GroupChatPage() {
             </div>
           )}
         </section>
-        </div>
-      </motion.main>
+      </ChatAppShell>
 
       {membersModalOpen && (
         <div className="fixed inset-0 z-[150] bg-black/55 backdrop-blur-sm">
@@ -1297,6 +1313,6 @@ export default function GroupChatPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
