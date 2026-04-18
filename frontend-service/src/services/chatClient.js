@@ -464,8 +464,9 @@ export async function deleteGroupMessage() {
 export async function toggleDmReaction() {
   const snapshot = await getCurrentAuthSnapshot()
   if (!snapshot?.token) throw new Error('Not authenticated')
-  const messageId = String(arguments?.[0]?.messageId || arguments?.[0] || '').trim()
-  const emoji = String(arguments?.[0]?.emoji || arguments?.[1] || '').trim()
+  const arg0 = arguments?.[0] || {}
+  const messageId = String(arg0.messageId || arg0.message_id || '').trim()
+  const emoji = String(arg0.emoji || arguments?.[1] || '').trim()
   if (!messageId || !emoji) throw new Error('messageId and emoji are required')
   const res = await fetch(`${API_BASE_URL}/chat/reactions/toggle`, {
     method: 'POST',

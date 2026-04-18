@@ -1032,17 +1032,34 @@ async def toggle_reaction(req: Request, authorization: Optional[str] = Header(de
 
     url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/message_reactions"
     headers = {"apikey": postgrest_headers(use_service_role=False).get("apikey", ""), "authorization": f"Bearer {access_token}", "content-type": "application/json"}
+    r_ins: Optional[httpx.Response] = None
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
-            # Try delete first (toggle off)
-            r_del = await client.delete(
+            # PostgREST DELETE can succeed with 204 even when 0 rows match; don't use "delete-first" blindly.
+            r_get = await client.get(
                 url,
                 headers=headers,
-                params={"message_id": f"eq.{message_id}", "user_id": f"eq.{uid}", "emoji": f"eq.{emoji}"},
+                params={
+                    "select": "message_id,user_id,emoji",
+                    "message_id": f"eq.{message_id}",
+                    "user_id": f"eq.{uid}",
+                    "emoji": f"eq.{emoji}",
+                    "limit": "1",
+                },
             )
-            if r_del.status_code in (200, 204):
+            if r_get.status_code >= 400:
+                return JSONResponse(status_code=_status_map(r_get.status_code), content={"success": False, "message": _supabase_hint(r_get)})
+            existing = await safe_json_list(r_get)
+            if existing:
+                r_del = await client.delete(
+                    url,
+                    headers=headers,
+                    params={"message_id": f"eq.{message_id}", "user_id": f"eq.{uid}", "emoji": f"eq.{emoji}"},
+                )
+                if r_del.status_code >= 400:
+                    return JSONResponse(status_code=_status_map(r_del.status_code), content={"success": False, "message": _supabase_hint(r_del)})
                 return {"success": True, "active": False}
-            # If nothing deleted, insert
+
             r_ins = await client.post(
                 url,
                 headers={**headers, "prefer": "resolution=merge-duplicates,return=minimal"},
@@ -1050,6 +1067,8 @@ async def toggle_reaction(req: Request, authorization: Optional[str] = Header(de
             )
     except Exception as e:
         return JSONResponse(status_code=503, content={"success": False, "message": _net_err_hint(e)})
+    if r_ins is None:
+        return JSONResponse(status_code=500, content={"success": False, "message": "Reaction toggle failed"})
     if r_ins.status_code not in (200, 201, 204, 409):
         return JSONResponse(status_code=_status_map(r_ins.status_code), content={"success": False, "message": _supabase_hint(r_ins)})
     return {"success": True, "active": True}

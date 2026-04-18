@@ -122,7 +122,23 @@ const ChatMessageRow = memo(function ChatMessageRow({
                 </div>
               )}
             </div>
-            <div className="relative -mr-1" data-message-menu>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                className={cn(
+                  'rounded-md p-1.5 transition',
+                  mine
+                    ? 'text-emerald-700/90 hover:bg-emerald-200/70 dark:text-emerald-200/90 dark:hover:bg-emerald-500/20'
+                    : 'text-amber-700/90 hover:bg-yellow-100/80 dark:text-amber-200/90 dark:hover:bg-amber-500/15'
+                )}
+                onClick={() => setOpenReactionPickerId((prev) => (prev === m._id ? null : m._id))}
+                aria-label="React to message"
+                title="React"
+              >
+                <SmilePlus className="h-4 w-4" />
+              </button>
+
+              <div className="relative -mr-1" data-message-menu>
               <button
                 type="button"
                 className={cn(
@@ -142,6 +158,18 @@ const ChatMessageRow = memo(function ChatMessageRow({
                   role="menu"
                   className="anim-pop absolute right-0 top-full z-50 mt-1.5 min-w-[170px] overflow-hidden rounded-2xl border border-amber-200/90 bg-white py-1.5 shadow-xl shadow-amber-900/10 dark:border-navy-700/60 dark:bg-navy-950"
                 >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-amber-950 transition-colors duration-150 hover:bg-amber-100 dark:text-slate-50 dark:hover:bg-navy-800/60"
+                    onClick={() => {
+                      toggleMessageMenu(m._id);
+                      setOpenReactionPickerId((prev) => (prev === m._id ? null : m._id));
+                    }}
+                  >
+                    <SmilePlus className="h-4 w-4 shrink-0 opacity-80" />
+                    React
+                  </button>
                   {mine && (
                     <>
                       <button
@@ -202,6 +230,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
                   )}
                 </div>
               )}
+              </div>
             </div>
           </div>
           {m.mediaType === 'image' && m.mediaUrl ? (
