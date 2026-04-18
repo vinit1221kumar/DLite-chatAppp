@@ -56,7 +56,7 @@ function linkifyGroupMessage(text) {
           href={part}
           target="_blank"
           rel="noreferrer"
-          className="font-medium text-violet-600 underline decoration-violet-400/70 underline-offset-2 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300"
+          className="font-medium text-sky-600 underline decoration-sky-400/70 underline-offset-2 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300"
         >
           {part}
         </a>
@@ -159,9 +159,9 @@ export default function GroupChatPage() {
         const reactionEntries = Object.entries(m.reactions || {});
         const t = formatGroupMessageTime(m.createdAt);
         const bubble = mine
-          ? 'border-violet-200/90 bg-violet-100/95 text-slate-900 shadow-sm dark:border-violet-500/35 dark:bg-violet-950/45 dark:text-slate-100'
+          ? 'border-sky-200/90 bg-sky-100/95 text-slate-900 shadow-sm dark:border-sky-500/35 dark:bg-sky-950/45 dark:text-slate-100'
           : 'border-slate-200/90 bg-slate-100/95 text-slate-900 shadow-sm dark:border-slate-600 dark:bg-slate-800/90 dark:text-slate-100';
-        const iconMine = 'text-violet-800/80 hover:bg-violet-200/60 dark:text-violet-200/90 dark:hover:bg-white/10';
+        const iconMine = 'text-sky-800/80 hover:bg-sky-200/60 dark:text-sky-200/90 dark:hover:bg-white/10';
         const iconTheirs = 'text-slate-600 hover:bg-slate-200/80 dark:text-slate-300 dark:hover:bg-slate-700/50';
 
         return (
@@ -191,7 +191,7 @@ export default function GroupChatPage() {
                   {t ? <span className="text-slate-400 dark:text-slate-500"> · {t}</span> : null}
                   {isPinned ? <Pin className="ml-1 inline h-3 w-3 align-middle opacity-70" /> : null}
                   {mine && memberCount > 1 ? (
-                    <span className="ml-2 text-[10px] font-medium text-violet-600/90 dark:text-violet-300/90">
+                    <span className="ml-2 text-[10px] font-medium text-sky-600/90 dark:text-sky-300/90">
                       {readCount > 0 ? `Read ${readCount}/${memberCount - 1}` : 'Sent'}
                     </span>
                   ) : null}
@@ -243,7 +243,7 @@ export default function GroupChatPage() {
                     onClick={() => setOpenGroupReactionPickerId((prev) => (prev === m._id ? null : m._id))}
                     title="React"
                   >
-                    <SmilePlus className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+                    <SmilePlus className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
                   </button>
                 </div>
               </div>
@@ -282,12 +282,12 @@ export default function GroupChatPage() {
                       type="button"
                       className={cn(
                         'flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition',
-                        reacted ? 'border-violet-400 bg-violet-50 dark:border-violet-500 dark:bg-slate-800' : 'border-slate-200/80 bg-white dark:border-slate-700 dark:bg-slate-900'
+                        reacted ? 'border-sky-400 bg-sky-50 dark:border-sky-500 dark:bg-slate-800' : 'border-slate-200/80 bg-white dark:border-slate-700 dark:bg-slate-900'
                       )}
                       onClick={() => handleToggleGroupReaction(m._id, emoji)}
                     >
                       <span>{emoji}</span>
-                      <span className={reacted ? 'text-slate-600 dark:text-violet-400' : 'text-slate-700 dark:text-slate-300'}>{count}</span>
+                      <span className={reacted ? 'text-slate-600 dark:text-sky-400' : 'text-slate-700 dark:text-slate-300'}>{count}</span>
                     </button>
                   );
                 })}
@@ -795,23 +795,29 @@ export default function GroupChatPage() {
 
   return (
     <>
-      <ChatAppShell gridClassName="grid-cols-1 lg:grid-cols-[minmax(300px,360px)_1fr]">
-        <aside className="flex max-h-[42vh] min-h-0 flex-col border-b border-slate-200/80 bg-[#F9FAFB] dark:border-slate-800 dark:bg-slate-900/80 lg:max-h-none lg:border-b-0 lg:border-r">
-          <ChatAppIconRail active="groups" dmUnreadCount={dmUnreadTotal} />
+      <ChatAppShell gridClassName="grid-cols-1 lg:grid-cols-[64px_minmax(280px,340px)_1fr]">
+        <nav className="hidden min-h-0 lg:flex" aria-label="Primary">
+          <ChatAppIconRail variant="vertical" active="groups" dmUnreadCount={dmUnreadTotal} />
+        </nav>
+
+        <aside className="flex max-h-[42vh] min-h-0 flex-col border-b border-slate-200/80 bg-[#F7F8FA] dark:border-slate-800 dark:bg-slate-900/90 lg:max-h-none lg:border-b-0 lg:border-r">
+          <div className="shrink-0 lg:hidden">
+            <ChatAppIconRail active="groups" dmUnreadCount={dmUnreadTotal} />
+          </div>
 
           <div
             ref={groupSearchWrapRef}
             className="relative shrink-0 border-b border-slate-200/80 px-3 pb-3 pt-2 dark:border-slate-800"
           >
             <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-lg font-bold tracking-tight text-slate-800 dark:text-slate-100">Groups</h2>
+              <h2 className="text-base font-bold tracking-tight text-slate-900 dark:text-slate-100">Your groups</h2>
               <Button
                 type="button"
                 variant={groupSearchOpen ? 'default' : 'secondary'}
                 size="icon"
-                className="h-9 w-9 shrink-0 rounded-full bg-violet-600 text-white shadow-md shadow-violet-600/30 hover:bg-violet-700"
+                className="h-9 w-9 shrink-0 rounded-full bg-sky-600 text-white shadow-md shadow-sky-600/25 hover:bg-sky-700"
                 aria-expanded={groupSearchOpen}
-                aria-label="Set group ID"
+                aria-label="Open or create group"
                 onClick={() => setGroupSearchOpen((o) => !o)}
               >
                 <Search className="h-5 w-5" />
@@ -821,19 +827,18 @@ export default function GroupChatPage() {
             <div className="mb-3 flex rounded-full border border-slate-200/80 bg-slate-100/90 p-0.5 dark:border-slate-700 dark:bg-slate-800/80">
               <Link
                 href="/dashboard"
-                className="flex-1 rounded-full px-2 py-2 text-center text-[11px] font-bold uppercase tracking-wide text-slate-600 transition hover:text-violet-600 dark:text-slate-400 dark:hover:text-violet-400 sm:px-3"
+                className="flex-1 rounded-full px-2 py-2 text-center text-[11px] font-bold uppercase tracking-wide text-slate-600 transition hover:text-sky-600 dark:text-slate-400 dark:hover:text-sky-400 sm:px-3"
               >
                 Personal
               </Link>
-              <span className="flex-1 rounded-full bg-violet-600 px-2 py-2 text-center text-[11px] font-bold uppercase tracking-wide text-white shadow-sm shadow-violet-600/25 sm:px-3">
+              <span className="flex-1 rounded-full bg-sky-600 px-2 py-2 text-center text-[11px] font-bold uppercase tracking-wide text-white shadow-sm shadow-sky-600/25 sm:px-3">
                 Group
               </span>
             </div>
-            <p className="mb-2 text-[10px] text-slate-400 dark:text-slate-500">Public channels — coming soon</p>
 
             {groupSearchOpen && (
               <div className="anim-pop absolute left-3 right-3 top-full z-[60] mt-2 overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-3 shadow-xl dark:border-slate-700 dark:bg-slate-950">
-                <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:text-violet-400">
+                <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">
                   Group ID
                 </label>
                 <input
@@ -846,7 +851,7 @@ export default function GroupChatPage() {
                   Open / Create group
                 </Button>
                 <div className="mt-3 space-y-1">
-                  <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:text-violet-400">
+                  <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">
                     Add user by username
                   </label>
                   <div className="flex gap-2">
@@ -884,11 +889,11 @@ export default function GroupChatPage() {
                 <div className="font-mono text-xs opacity-80">{groupId.trim()}</div>
               </div>
             ) : (
-              <p className="text-xs text-slate-700/75 dark:text-violet-400/85">Tap the search icon next to Group to set a group ID.</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Use the search button to open or create a group.</p>
             )}
 
             <div>
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-violet-400">
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 My groups
               </p>
               {groupsLoadError && (
@@ -919,7 +924,12 @@ export default function GroupChatPage() {
                         setGroupId(group.id);
                         setGroupInput(group.id);
                       }}
-                      className="w-full rounded-lg border border-slate-200/80 bg-white/70 px-2.5 py-2 text-left text-xs font-medium text-slate-800 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-100 dark:hover:bg-slate-800/90"
+                      className={cn(
+                        'w-full rounded-xl border px-2.5 py-2 text-left text-xs font-medium transition',
+                        groupId.trim() === group.id
+                          ? 'border-sky-200 bg-sky-100 text-slate-900 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-50'
+                          : 'border-slate-200/80 bg-white/70 text-slate-800 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-100 dark:hover:bg-slate-800/90',
+                      )}
                     >
                       <div>Group {group.id}</div>
                       <div className="text-[11px] opacity-80">{group.memberCount} members</div>
@@ -930,7 +940,7 @@ export default function GroupChatPage() {
             </div>
 
             <div>
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-violet-400">
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 Members
               </p>
               {membersLoadError && (
@@ -983,7 +993,7 @@ export default function GroupChatPage() {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <MessageSquare className="h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />
+                  <MessageSquare className="h-4 w-4 shrink-0 text-sky-600 dark:text-sky-400" />
                   <h2 className="truncate text-base font-bold text-slate-900 dark:text-slate-50">
                     {groupId.trim() ? groupId.trim() : 'Group chat'}
                   </h2>
@@ -994,29 +1004,7 @@ export default function GroupChatPage() {
                   {groupMuted ? ' · muted' : ''}
                 </p>
               </div>
-              <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  disabled={!groupId.trim() || !user?.id || chatTransferBusy}
-                  onClick={handleExportGroupChatHistory}
-                  title="Export this group chat as JSON"
-                >
-                  <Download className="mr-1.5 h-4 w-4" />
-                  Export
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  disabled={!groupId.trim() || !user?.id || chatTransferBusy}
-                  onClick={() => importGroupFileRef.current?.click()}
-                  title="Import group chat JSON"
-                >
-                  <Upload className="mr-1.5 h-4 w-4" />
-                  Import
-                </Button>
+              <div className="flex shrink-0 items-center gap-1">
                 <input
                   ref={importGroupFileRef}
                   type="file"
@@ -1024,59 +1012,85 @@ export default function GroupChatPage() {
                   className="hidden"
                   onChange={(e) => handleImportGroupChatFile(e.target.files?.[0])}
                 />
-              <div ref={groupMenuRef} className="relative">
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  className="h-8 w-8"
-                  onClick={() => setGroupMenuOpen((o) => !o)}
-                  aria-label="Group options"
-                >
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-                {groupMenuOpen && (
-                  <div
-                    role="menu"
-                    className="anim-pop absolute right-0 top-full z-40 mt-1.5 min-w-[190px] overflow-hidden rounded-xl border border-slate-200/90 bg-white py-1.5 shadow-xl shadow-slate-900/10 dark:border-slate-700 dark:bg-slate-950"
+                <div ref={groupMenuRef} className="relative">
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8"
+                    onClick={() => setGroupMenuOpen((o) => !o)}
+                    aria-label="Group options"
                   >
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-slate-900 transition-colors hover:bg-violet-50 dark:text-slate-50 dark:hover:bg-slate-800"
-                      onClick={handleShowMembers}
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                  {groupMenuOpen && (
+                    <div
+                      role="menu"
+                      className="anim-pop absolute right-0 top-full z-40 mt-1.5 min-w-[200px] overflow-hidden rounded-xl border border-slate-200/90 bg-white py-1.5 shadow-xl shadow-slate-900/10 dark:border-slate-700 dark:bg-slate-950"
                     >
-                      <Users className="h-4 w-4 shrink-0 opacity-80" />
-                      Show members
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-slate-900 transition-colors hover:bg-violet-50 dark:text-slate-50 dark:hover:bg-slate-800"
-                      onClick={handleToggleMuteGroup}
-                    >
-                      <BellOff className="h-4 w-4 shrink-0 opacity-80" />
-                      {groupMuted ? 'Unmute group' : 'Mute group'}
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-red-700 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/50"
-                      onClick={handleLeaveGroup}
-                    >
-                      <LogOut className="h-4 w-4 shrink-0" />
-                      Leave group
-                    </button>
-                  </div>
-                )}
-              </div>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-slate-900 transition-colors hover:bg-sky-50 dark:text-slate-50 dark:hover:bg-slate-800"
+                        disabled={!groupId.trim() || !user?.id || chatTransferBusy}
+                        onClick={() => {
+                          setGroupMenuOpen(false);
+                          handleExportGroupChatHistory();
+                        }}
+                      >
+                        <Download className="h-4 w-4 shrink-0 opacity-80" />
+                        Export chat
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-slate-900 transition-colors hover:bg-sky-50 dark:text-slate-50 dark:hover:bg-slate-800"
+                        disabled={!groupId.trim() || !user?.id || chatTransferBusy}
+                        onClick={() => {
+                          setGroupMenuOpen(false);
+                          importGroupFileRef.current?.click();
+                        }}
+                      >
+                        <Upload className="h-4 w-4 shrink-0 opacity-80" />
+                        Import chat
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-slate-900 transition-colors hover:bg-sky-50 dark:text-slate-50 dark:hover:bg-slate-800"
+                        onClick={handleShowMembers}
+                      >
+                        <Users className="h-4 w-4 shrink-0 opacity-80" />
+                        Show members
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-slate-900 transition-colors hover:bg-sky-50 dark:text-slate-50 dark:hover:bg-slate-800"
+                        onClick={handleToggleMuteGroup}
+                      >
+                        <BellOff className="h-4 w-4 shrink-0 opacity-80" />
+                        {groupMuted ? 'Unmute group' : 'Mute group'}
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-red-700 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/50"
+                        onClick={handleLeaveGroup}
+                      >
+                        <LogOut className="h-4 w-4 shrink-0" />
+                        Leave group
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
             <div className="relative mt-3">
               <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
-                className="w-full rounded-full border border-slate-200/90 bg-slate-50/90 py-2.5 pl-10 pr-3 text-sm text-slate-800 outline-none ring-violet-500/20 placeholder:text-slate-400 focus:border-violet-400 focus:ring-2 dark:border-slate-600 dark:bg-slate-800/60 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-violet-500"
+                className="w-full rounded-full border border-slate-200/90 bg-slate-50/90 py-2.5 pl-10 pr-3 text-sm text-slate-800 outline-none ring-sky-500/20 placeholder:text-slate-400 focus:border-sky-500 focus:ring-2 dark:border-slate-600 dark:bg-slate-800/60 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-sky-500"
                 placeholder="Search message…"
                 value={groupMsgSearch}
                 onChange={(e) => setGroupMsgSearch(e.target.value)}
@@ -1088,17 +1102,17 @@ export default function GroupChatPage() {
 
           {/* Group pinned messages banner */}
           {groupPinnedMessages.length > 0 && groupId.trim() && (
-            <div className="shrink-0 border-b border-slate-200/80 bg-violet-50/70 dark:border-slate-800 dark:bg-slate-900/90">
+            <div className="shrink-0 border-b border-slate-200/80 bg-sky-50/70 dark:border-slate-800 dark:bg-slate-900/90">
               {groupPinnedMessages.slice(0, 1).map((pin) => (
                 <div key={pin.messageId} className="flex items-center gap-2 px-4 py-2">
-                  <Pin className="h-3.5 w-3.5 shrink-0 text-violet-600 dark:text-violet-400" />
+                  <Pin className="h-3.5 w-3.5 shrink-0 text-sky-600 dark:text-sky-400" />
                   <p className="min-w-0 flex-1 truncate text-xs font-medium text-slate-800 dark:text-slate-100">
                     {pin.content || 'Pinned message'}
                   </p>
                   {isGroupAdmin && (
                     <button
                       type="button"
-                      className="shrink-0 text-xs text-violet-600 hover:underline dark:text-violet-400"
+                      className="shrink-0 text-xs text-sky-600 hover:underline dark:text-sky-400"
                       onClick={() => handleUnpinGroupMessage(pin.messageId)}
                     >
                       Unpin
@@ -1116,7 +1130,7 @@ export default function GroupChatPage() {
 
           <div
             ref={messagesWrapRef}
-            className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain bg-white px-4 py-4 dark:bg-slate-950/80"
+            className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain bg-[#eef2f7] px-4 py-4 dark:bg-slate-950/80"
           >
             {messagesLoadError && (
               <div className="rounded-xl border border-red-400/40 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">
@@ -1134,7 +1148,7 @@ export default function GroupChatPage() {
             )}
 
             {messagesLoading && (
-              <div className="rounded-xl border border-slate-200/80 bg-violet-50/70 px-3 py-2 text-xs text-slate-700 dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-300">
+              <div className="rounded-xl border border-slate-200/80 bg-sky-50/60 px-3 py-2 text-xs text-slate-700 dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-300">
                 Loading messages…
               </div>
             )}
@@ -1206,7 +1220,7 @@ export default function GroupChatPage() {
               <button
                 type="submit"
                 disabled={!groupId || !message.trim() || !isMember || sending}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-md shadow-violet-600/25 transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-45"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-600 text-white shadow-md shadow-sky-600/25 transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-45"
                 aria-label="Send"
               >
                 {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -1253,7 +1267,7 @@ export default function GroupChatPage() {
                 groupMembers.map((member) => (
                   <div
                     key={member.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-violet-50/70 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/50"
+                    className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-sky-50/70 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/50"
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{getMemberLabel(member)}</p>
@@ -1297,12 +1311,12 @@ export default function GroupChatPage() {
                 className="hidden"
                 onChange={handleGroupPhotoPick}
               />
-              <div className="mb-3 flex items-center gap-3 rounded-xl border border-slate-200/80 bg-violet-50/70 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-900/50">
+              <div className="mb-3 flex items-center gap-3 rounded-xl border border-slate-200/80 bg-sky-50/70 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-900/50">
                 {groupPhotoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={groupPhotoUrl} alt="Group" className="h-12 w-12 rounded-xl object-cover" />
                 ) : (
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-200/80 text-violet-900 dark:bg-slate-800/80 dark:text-slate-200">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-sky-200/80 text-sky-900 dark:bg-slate-800/80 dark:text-slate-200">
                     <Users className="h-5 w-5" />
                   </div>
                 )}
