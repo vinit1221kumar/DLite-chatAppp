@@ -96,7 +96,10 @@ export function useVideoCall({ userId, roomId }) {
   const buildPeerConnection = useCallback(() => {
     pendingIceCandidatesRef.current = [];
     remoteDescriptionSetRef.current = false;
-    const pc = new RTCPeerConnection({ iceServers: DEFAULT_ICE_SERVERS });
+    const pc = new RTCPeerConnection({
+      iceServers: DEFAULT_ICE_SERVERS,
+      iceCandidatePoolSize: 10,
+    });
     pcRef.current = pc;
 
     pc.ontrack = (ev) => {

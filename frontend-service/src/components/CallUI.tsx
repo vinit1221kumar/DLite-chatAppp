@@ -369,8 +369,8 @@ export default function CallUI({
           const hasTurn = iceConfigHasRelayServer(DEFAULT_ICE_SERVERS);
           setError(
             hasTurn
-              ? "Connection failed (ICE). Check TURN credentials, firewall, or try another network. See about:webrtc in Firefox for details."
-              : "Connection failed — this network usually needs a TURN relay. Add NEXT_PUBLIC_ICE_SERVERS_JSON with STUN + TURN (see docs/ENVIRONMENT_VARIABLES.md), restart the app, then try again.",
+              ? "WebRTC ICE failed and the browser could not use your TURN relay. Check: turn: vs turns: (TLS cert must be valid), username/password match coturn, ports 3478 UDP/TCP (and 5349 for TLS) open, and Vercel env NEXT_PUBLIC_ICE_SERVERS_JSON matches production. Use about:webrtc → Connection log for relay errors."
+              : "Connection failed — this network usually needs TURN. Set NEXT_PUBLIC_ICE_SERVERS_JSON with STUN + TURN on Vercel, redeploy, then retry (see docs/ENVIRONMENT_VARIABLES.md).",
           );
         } else if (nextState === "disconnected" || nextState === "closed") {
           setStatus("ended");

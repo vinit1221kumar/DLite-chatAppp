@@ -44,6 +44,11 @@ This project is configured to use **Supabase Auth** (no local-auth fallback).
     - `[{"urls":["stun:stun.l.google.com:19302"]},{"urls":["turn:turn.example.com:3478","turns:turn.example.com:5349"],"username":"your-user","credential":"your-secret"}]`
   - Keep secrets out of git; set in deployment env or `.env.local`.
 
+#### Deploy checklist (e.g. Vercel + Render)
+
+- **Socket.IO**: Set `NEXT_PUBLIC_CHAT_SOCKET_URL` / `NEXT_PUBLIC_CALL_SOCKET_URL` to your Render **HTTPS** origin (e.g. `https://dlite-chatapp.onrender.com`). On Render, set **`SOCKET_IO_CORS_ORIGINS`** to include your Vercel URL (e.g. `https://frontend-dlite.vercel.app`) so polling and WebSocket upgrades are allowed.
+- **TURN “appears broken” in Firefox**: Usually means relay candidates failed (not missing). Verify: **valid TLS** for `turns:` (no self-signed without trust), **static username/password** match `coturn`, **listening ports** reachable from the public internet, and **both peers** get the same `NEXT_PUBLIC_ICE_SERVERS_JSON` after redeploy. Use **about:webrtc** → connection log for `relay` / error lines.
+
 ## `worker-service` (backups)
 
 This service periodically exports messages from Supabase and writes them to disk (JSON files).

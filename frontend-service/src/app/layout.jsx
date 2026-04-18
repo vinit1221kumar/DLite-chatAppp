@@ -6,6 +6,8 @@ const inter = Inter({
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-inter',
+  // Avoid browser “preloaded … was not used” on heavy routes; font still loads via className.
+  preload: false,
 });
 
 export const metadata = {

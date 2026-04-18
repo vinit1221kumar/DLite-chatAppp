@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client'
+import { createSocketIoClientOptions, waitForDomReady } from '@/lib/socketIoClientOptions'
 import { CALL_SOCKET_URL } from '@/services/appClient'
 import { getCurrentAuthSnapshot } from '@/services/authClient'
 import { AnswerPayload, IceCandidatePayload, OfferPayload } from '@/types/call'
@@ -32,11 +33,8 @@ async function ensureCallSocket(userId: string): Promise<CallSocket> {
   const auth: Record<string, string> = { userId }
   if (token) auth.token = token
 
-  socketInstance = io(CALL_SOCKET_URL, {
-    autoConnect: true,
-    transports: ['websocket'],
-    auth,
-  })
+  await waitForDomReady()
+  socketInstance = io(CALL_SOCKET_URL, createSocketIoClientOptions(auth))
   return socketInstance
 }
 

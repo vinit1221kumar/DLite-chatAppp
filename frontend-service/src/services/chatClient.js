@@ -1,4 +1,5 @@
 import { io } from 'socket.io-client'
+import { createSocketIoClientOptions, waitForDomReady } from '@/lib/socketIoClientOptions'
 import { API_BASE_URL, CHAT_SOCKET_URL } from './appClient'
 import { getCurrentAuthSnapshot } from './authClient'
 
@@ -51,11 +52,11 @@ async function getSocket({ userId } = {}) {
     socketInstance = null
   }
   lastChatSocketAuthKey = key
-  socketInstance = io(CHAT_SOCKET_URL, {
-    autoConnect: true,
-    transports: ['websocket'],
-    auth: auth?.userId ? auth : undefined,
-  })
+  await waitForDomReady()
+  socketInstance = io(
+    CHAT_SOCKET_URL,
+    createSocketIoClientOptions(auth?.userId ? auth : undefined),
+  )
   return socketInstance
 }
 

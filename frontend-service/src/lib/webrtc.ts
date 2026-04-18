@@ -1,5 +1,45 @@
 import { IceCandidatePayload } from "@/types/call";
 
+const FALLBACK_STUN: RTCIceServer = { urls: "stun:stun.l.google.com:19302" };
+
+function normalizeIceServers(parsed: unknown[]): RTCIceServer[] {
+  const out: RTCIceServer[] = [];
+  for (const entry of parsed) {
+    if (!entry || typeof entry !== "object") continue;
+    const o = entry as Record<string, unknown>;
+    let urls = o.urls;
+    if (typeof urls === "string") {
+      const t = urls.trim();
+      if (!t) continue;
+      urls = t;
+    } else if (Array.isArray(urls)) {
+      const list = urls
+        .filter((u): u is string => typeof u === "string")
+        .map((u) => u.trim())
+        .filter(Boolean);
+      if (list.length === 0) continue;
+      urls = list;
+    } else {
+      continue;
+    }
+    const server: RTCIceServer = { urls: urls as string | string[] };
+    if (typeof o.username === "string" && o.username) server.username = o.username;
+    if (typeof o.credential === "string" && o.credential) server.credential = o.credential;
+    out.push(server);
+  }
+  return out;
+}
+
+function configHasStun(servers: RTCIceServer[]): boolean {
+  for (const s of servers) {
+    const urls = Array.isArray(s.urls) ? s.urls : [s.urls];
+    for (const url of urls) {
+      if (typeof url === "string" && /^stun:/i.test(url)) return true;
+    }
+  }
+  return false;
+}
+
 function readIceServersFromEnv(): RTCIceServer[] | null {
   // Accept JSON to support TURN credentials without complex parsing.
   // Example:
@@ -9,14 +49,19 @@ function readIceServersFromEnv(): RTCIceServer[] | null {
   try {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return null;
-    return parsed as RTCIceServer[];
+    const normalized = normalizeIceServers(parsed);
+    return normalized.length ? normalized : null;
   } catch {
     return null;
   }
 }
 
-export const DEFAULT_ICE_SERVERS: RTCIceServer[] =
-  readIceServersFromEnv() ?? [{ urls: "stun:stun.l.google.com:19302" }];
+export const DEFAULT_ICE_SERVERS: RTCIceServer[] = (() => {
+  const fromEnv = readIceServersFromEnv();
+  if (!fromEnv?.length) return [FALLBACK_STUN];
+  if (!configHasStun(fromEnv)) return [FALLBACK_STUN, ...fromEnv];
+  return fromEnv;
+})();
 
 /** True if at least one entry uses TURN/TURNS (relay). STUN-only often fails across strict NATs. */
 export function iceConfigHasRelayServer(servers: RTCIceServer[]): boolean {
@@ -44,6 +89,7 @@ export function createPeerConnection({
 }: CreatePeerConnectionArgs): RTCPeerConnection {
   const peerConnection = new RTCPeerConnection({
     iceServers: DEFAULT_ICE_SERVERS,
+    iceCandidatePoolSize: 10,
   });
 
   peerConnection.onicecandidate = (event) => {
