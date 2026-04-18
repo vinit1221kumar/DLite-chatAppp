@@ -4,81 +4,80 @@
 
 @layer base {
   /**
-   * App UI tokens — light: reference UI (#f0f2f5 canvas, teal accent, lavender outgoing bubbles).
-   * Dark: slate surfaces + teal accent.
+   * App UI tokens — original: warm cream + logo gold (light), deep slate + gold (dark).
    */
   :root {
     color-scheme: light;
-    --ui-fg: #0f172a;
-    --ui-fg-muted: #64748b;
-    --ui-canvas: #f0f2f5;
+    --ui-fg: #1c1917;
+    --ui-fg-muted: #57534e;
+    --ui-canvas: #ebe6dc;
     --ui-shell: #ffffff;
-    --ui-sidebar: #ffffff;
+    --ui-sidebar: #f3efe8;
     --ui-panel: #ffffff;
-    --ui-border: rgba(15, 23, 42, 0.08);
-    --ui-muted: #f1f5f9;
-    --ui-accent: #0d9488;
-    --ui-accent-hover: #0f766e;
-    --ui-on-accent: #ffffff;
-    --ui-accent-subtle: rgba(13, 148, 136, 0.12);
-    --ui-accent-text: #0f766e;
-    --ui-bubble-mine: #e9e4f7;
-    --ui-bubble-mine-border: rgba(99, 102, 241, 0.22);
+    --ui-border: rgba(62, 47, 28, 0.11);
+    --ui-muted: #e8e2d8;
+    --ui-accent: #b8860b;
+    --ui-accent-hover: #9a7209;
+    --ui-on-accent: #fffef9;
+    --ui-accent-subtle: rgba(184, 134, 11, 0.14);
+    --ui-accent-text: #6b4f0c;
+    --ui-bubble-mine: #ece4d4;
+    --ui-bubble-mine-border: rgba(184, 134, 11, 0.22);
     --ui-bubble-other: #ffffff;
-    --ui-bubble-other-border: rgba(15, 23, 42, 0.09);
-    --ui-thread-bg: #f0f2f5;
-    --ui-composer-bg: #f0f2f5;
-    --ui-composer-pill: #ffffff;
-    --ui-rail-bg: #ffffff;
-    --ui-rail-active: #14b8a6;
-    --ui-rail-fg: #475569;
-    --ui-rail-fg-muted: #94a3b8;
-    --ui-row-selected: #f0fdfa;
-    --ui-row-selected-border: rgba(13, 148, 136, 0.28);
-    --ui-link: #0d9488;
-    --ui-focus: rgba(13, 148, 136, 0.28);
-    --ui-menu-hover: #f1f5f9;
-    --ui-pinned-bg: rgba(13, 148, 136, 0.07);
-    --ui-poll-bg: #134e4a;
-    --ui-poll-bar: #5eead4;
-    --ui-poll-muted: rgba(240, 253, 250, 0.9);
+    --ui-bubble-other-border: rgba(62, 47, 28, 0.1);
+    --ui-thread-bg: #e3ddd4;
+    --ui-composer-bg: #e8e3db;
+    --ui-composer-pill: rgba(255, 255, 255, 0.94);
+    --ui-rail-bg: #2d2926;
+    --ui-rail-active: #c9a227;
+    --ui-rail-fg: #d6d3cd;
+    --ui-rail-fg-muted: #9c9890;
+    --ui-row-selected: #f0e8d4;
+    --ui-row-selected-border: rgba(184, 134, 11, 0.35);
+    --ui-link: #8b6914;
+    --ui-focus: rgba(184, 134, 11, 0.38);
+    --ui-menu-hover: color-mix(in srgb, var(--ui-accent) 12%, var(--ui-panel));
+    --ui-pinned-bg: color-mix(in srgb, var(--ui-accent) 14%, var(--ui-panel));
+    --ui-poll-bg: #5c4a32;
+    --ui-poll-bar: #d4a834;
+    --ui-poll-muted: rgba(255, 252, 245, 0.88);
   }
 
   .dark {
     color-scheme: dark;
-    --ui-fg: #f1f5f9;
-    --ui-fg-muted: #94a3b8;
-    --ui-canvas: #0f172a;
-    --ui-shell: #1e293b;
-    --ui-sidebar: #1e293b;
-    --ui-panel: #1e293b;
-    --ui-border: rgba(148, 163, 184, 0.12);
-    --ui-muted: #334155;
-    --ui-accent: #2dd4bf;
-    --ui-accent-hover: #5eead4;
-    --ui-on-accent: #0f172a;
-    --ui-accent-subtle: rgba(45, 212, 191, 0.14);
-    --ui-accent-text: #99f6e4;
-    --ui-bubble-mine: #312e81;
-    --ui-bubble-mine-border: rgba(129, 140, 248, 0.35);
-    --ui-bubble-other: #334155;
-    --ui-bubble-other-border: rgba(148, 163, 184, 0.14);
-    --ui-thread-bg: #0f172a;
-    --ui-composer-bg: #1e293b;
-    --ui-composer-pill: #334155;
-    --ui-rail-bg: #1e293b;
-    --ui-rail-active: #14b8a6;
-    --ui-rail-fg: #cbd5e1;
-    --ui-rail-fg-muted: #64748b;
-    --ui-row-selected: rgba(45, 212, 191, 0.12);
-    --ui-row-selected-border: rgba(45, 212, 191, 0.35);
-    --ui-link: #5eead4;
-    --ui-focus: rgba(45, 212, 191, 0.28);
-    --ui-menu-hover: rgba(51, 65, 85, 0.85);
-    --ui-pinned-bg: rgba(45, 212, 191, 0.08);
-    --ui-poll-bg: #042f2e;
-    --ui-poll-bar: #2dd4bf;
-    --ui-poll-muted: rgba(204, 251, 241, 0.88);
+    --ui-fg: #f5f5f4;
+    --ui-fg-muted: #a8a29e;
+    --ui-canvas: #0c0f14;
+    --ui-shell: #141a22;
+    --ui-sidebar: #111820;
+    --ui-panel: #141a22;
+    --ui-border: rgba(148, 163, 184, 0.14);
+    --ui-muted: #1a222d;
+    --ui-accent: #e3b84a;
+    --ui-accent-hover: #f0c85c;
+    --ui-on-accent: #1a1508;
+    --ui-accent-subtle: rgba(227, 184, 74, 0.16);
+    --ui-accent-text: #f5e6bc;
+    --ui-bubble-mine: #1e2836;
+    --ui-bubble-mine-border: rgba(227, 184, 74, 0.28);
+    --ui-bubble-other: #1a2029;
+    --ui-bubble-other-border: rgba(148, 163, 184, 0.16);
+    --ui-thread-bg: #0e1218;
+    --ui-composer-bg: #111820;
+    --ui-composer-pill: #1a222d;
+    --ui-rail-bg: #0a0e13;
+    --ui-rail-active: #e3b84a;
+    --ui-rail-fg: #e7e5e4;
+    --ui-rail-fg-muted: #78716c;
+    --ui-row-selected: rgba(227, 184, 74, 0.12);
+    --ui-row-selected-border: rgba(227, 184, 74, 0.38);
+    --ui-link: #f0c85c;
+    --ui-focus: rgba(227, 184, 74, 0.32);
+    --ui-menu-hover: color-mix(in srgb, var(--ui-accent) 14%, var(--ui-panel));
+    --ui-pinned-bg: color-mix(in srgb, var(--ui-accent) 12%, var(--ui-panel));
+    --ui-poll-bg: #2a2318;
+    --ui-poll-bar: #e3b84a;
+    --ui-poll-muted: rgba(245, 240, 230, 0.85);
   }
 
   html,
@@ -115,25 +114,25 @@
   .app-shell {
     @apply min-h-screen;
     background:
-      radial-gradient(1000px circle at 10% 0%, rgba(13, 148, 136, 0.06), transparent 55%),
-      radial-gradient(900px circle at 90% 20%, rgba(99, 102, 241, 0.04), transparent 50%),
+      radial-gradient(1000px circle at 10% 0%, rgba(184, 134, 11, 0.07), transparent 55%),
+      radial-gradient(900px circle at 90% 20%, rgba(212, 168, 52, 0.05), transparent 50%),
       var(--ui-canvas);
   }
 
   .dark .app-shell {
     background:
-      radial-gradient(1000px circle at 10% 0%, rgba(45, 212, 191, 0.06), transparent 55%),
-      radial-gradient(900px circle at 100% 30%, rgba(30, 27, 75, 0.35), transparent 50%),
+      radial-gradient(1000px circle at 10% 0%, rgba(227, 184, 74, 0.08), transparent 55%),
+      radial-gradient(900px circle at 100% 30%, rgba(30, 27, 20, 0.5), transparent 50%),
       var(--ui-canvas);
   }
 
   .landing-dots {
-    background-image: radial-gradient(rgba(13, 148, 136, 0.06) 1px, transparent 1px);
+    background-image: radial-gradient(rgba(184, 134, 11, 0.07) 1px, transparent 1px);
     background-size: 28px 28px;
   }
 
   .dark .landing-dots {
-    background-image: radial-gradient(rgba(45, 212, 191, 0.07) 1px, transparent 1px);
+    background-image: radial-gradient(rgba(227, 184, 74, 0.09) 1px, transparent 1px);
   }
 
   .card {
@@ -174,7 +173,7 @@
     @apply disabled:cursor-not-allowed disabled:opacity-60;
     background-color: var(--ui-accent);
     color: var(--ui-on-accent);
-    box-shadow: 0 10px 35px -18px rgba(13, 148, 136, 0.45);
+    box-shadow: 0 10px 35px -18px rgba(184, 134, 11, 0.55);
   }
 
   .btn-primary:hover {
@@ -182,7 +181,7 @@
   }
 
   .dark .btn-primary {
-    box-shadow: 0 10px 35px -18px rgba(45, 212, 191, 0.25);
+    box-shadow: 0 10px 35px -18px rgba(227, 184, 74, 0.35);
   }
 
   .btn-ghost {
