@@ -27,6 +27,7 @@ import {
   clearIceCandidates,
   endCall,
   listenForAnswer,
+  listenForCallEnded,
   listenForIceCandidates,
   listenForIncomingCall,
   listenForRejection,
@@ -450,22 +451,40 @@ export default function CallUI({
         mode,
       });
 
-      const unsubscribeAnswer = listenForAnswer(currentUserId, async (answer) => {
-        if (!answer || !peerConnectionRef.current) return;
-        await applyRemoteDescription(answer);
-        // Avoid overriding "connected" if ICE/DTLS finishes quickly.
-        setStatus((prev) => (prev === "connected" ? prev : "connecting"));
-      });
+      const unsubscribeAnswer = listenForAnswer(
+        currentUserId,
+        async (answer) => {
+          if (!answer || !peerConnectionRef.current) return;
+          await applyRemoteDescription({ type: answer.type, sdp: answer.sdp });
+          // Avoid overriding "connected" if ICE/DTLS finishes quickly.
+          setStatus((prev) => (prev === "connected" ? prev : "connecting"));
+        },
+        { fromUserId: targetUserId }
+      );
 
-      const unsubscribeRejected = listenForRejection(currentUserId, async (rejected) => {
-        if (!rejected) return;
-        setError(`Call rejected by ${rejected.byUserId}.`);
-        await endCall({ userId: currentUserId, peerUserId: targetUserId });
-        await hardCleanup();
-        setStatus("ended");
-      });
+      const unsubscribeRejected = listenForRejection(
+        currentUserId,
+        async (rejected) => {
+          if (!rejected) return;
+          setError(`Call rejected by ${rejected.byUserId}.`);
+          await endCall({ userId: currentUserId, peerUserId: targetUserId });
+          await hardCleanup();
+          setStatus("ended");
+        },
+        { fromUserId: targetUserId }
+      );
 
-      sessionUnsubRefs.current.push(unsubscribeAnswer, unsubscribeRejected);
+      const unsubscribeEnded = listenForCallEnded(
+        currentUserId,
+        async (payload) => {
+          if (!payload) return;
+          await hardCleanup();
+          setStatus("ended");
+        },
+        { fromUserId: targetUserId }
+      );
+
+      sessionUnsubRefs.current.push(unsubscribeAnswer, unsubscribeRejected, unsubscribeEnded);
       subscribeForRemoteIce(currentUserId, targetUserId);
       setPeerId(targetUserId);
       setStatus("calling");
@@ -515,6 +534,17 @@ export default function CallUI({
       const answer = await createAnswer(peerConnection);
       await acceptCall({ userId: currentUserId, callerId, answer });
       subscribeForRemoteIce(currentUserId, callerId);
+
+      const unsubscribeEndedCallee = listenForCallEnded(
+        currentUserId,
+        async (payload) => {
+          if (!payload) return;
+          await hardCleanup();
+          setStatus("ended");
+        },
+        { fromUserId: callerId }
+      );
+      sessionUnsubRefs.current.push(unsubscribeEndedCallee);
 
       setPeerId(callerId);
       setIncomingOffer(null);

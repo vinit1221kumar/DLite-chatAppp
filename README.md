@@ -147,13 +147,17 @@ docker compose up --build
 
 Connect with `userId` in handshake (`auth.userId` or query `userId`).
 
-Events:
+Events (client → server):
 
-- `call_user` → `{ toUserId, callType: 'audio'|'video', offer, callId? }`
-- `accept_call` → `{ callId, answer }`
-- `reject_call` → `{ callId, reason? }`
-- `ice_candidate` → `{ callId, toUserId, candidate }`
-- `end_call` → `{ callId, reason? }`
+- `call_user` → `{ toUserId, callType: 'audio'|'video', offer: { type, sdp } }`
+- `accept_call` → `{ toUserId, answer: { type, sdp } }` (callee → caller)
+- `reject_call` → `{ toUserId, reason? }`
+- `ice_candidate` → `{ toUserId, candidate: { candidate, sdpMid, sdpMLineIndex, usernameFragment? } }`
+- `end_call` → `{ toUserId, reason? }`
+
+Events (server → client):
+
+- `call_user` (incoming offer), `call_answer`, `call_rejected`, `call_ice_candidate`, `call_ended`
 
 ## Health checks (smoke test)
 

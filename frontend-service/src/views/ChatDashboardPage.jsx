@@ -35,10 +35,13 @@ import {
   subscribePinnedDmMessages
 } from '../services/chatClient';
 import {
+  AtSign,
+  BarChart2,
   Loader2,
   Lock,
   Archive,
   Download,
+  ImageIcon,
   MessageCircle,
   Mic,
   MicOff,
@@ -94,11 +97,28 @@ function formatListTime(iso) {
   return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 
+const DM_POLL_PREFIX = '__DL_POLL__';
+
+function parseDmPoll(content) {
+  if (!content || typeof content !== 'string' || !content.startsWith(DM_POLL_PREFIX)) return null;
+  try {
+    const data = JSON.parse(content.slice(DM_POLL_PREFIX.length));
+    const q = String(data.q || '').trim();
+    const raw = data.o || data.options;
+    if (!q || !Array.isArray(raw) || raw.length < 2) return null;
+    const o = raw.map((x) => String(x || '').trim()).filter(Boolean);
+    if (o.length < 2) return null;
+    return { q, o: o.slice(0, 6) };
+  } catch {
+    return null;
+  }
+}
+
 const ChatMessageRow = memo(function ChatMessageRow({
   m,
-  idx,
   mine,
   senderLabel,
+  avatarSeed,
   canEditDelete,
   isPinned,
   peerKey,
@@ -117,212 +137,332 @@ const ChatMessageRow = memo(function ChatMessageRow({
   handleToggleDmReaction,
 }) {
   const reactionEntries = Object.entries(m.reactions || {});
+  const poll = parseDmPoll(m.content);
+  const isPollMessage = Boolean(poll);
+  const showPlainText = !isPollMessage && (m.content || m.isDeleted);
+
+  const bubbleBase = mine
+    ? 'rounded-[1.25rem] rounded-tr-md border border-emerald-200/90 bg-emerald-50 text-slate-800 shadow-sm dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-50'
+    : 'rounded-[1.25rem] rounded-tl-md border border-slate-200/90 bg-white text-slate-800 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100';
+
+  const iconBtnMine =
+    'text-emerald-900/70 hover:bg-emerald-900/10 dark:text-emerald-200/80 dark:hover:bg-white/10';
+  const iconBtnTheirs =
+    'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800';
+
+  const menuPollSafe = !isPollMessage;
+
   return (
     <div className={cn('group flex w-full flex-col', mine ? 'items-end' : 'items-start')}>
-      <div className="relative flex items-end">
-        <div
-          className={cn(
-            'relative max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm sm:max-w-[70%]',
-            mine
-              ? 'rounded-br-lg bg-violet-600 text-white shadow-sm shadow-violet-600/20 dark:bg-violet-600 dark:text-white'
-              : 'rounded-bl-lg border border-slate-200/90 bg-slate-100 text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100'
-          )}
-        >
-          <div className="flex items-center justify-between gap-2">
-            <div
-              className={cn(
-                'truncate text-[11px] font-semibold tracking-wide',
-                mine ? 'text-violet-100' : 'text-slate-500 dark:text-slate-400'
-              )}
-            >
-              {senderLabel}
-              {isPinned && <Pin className="ml-1 inline h-2.5 w-2.5 opacity-70" />}
-              {mine && (
-                <div
-                  className={cn(
-                    'mt-0.5 text-[10px] font-semibold tracking-wide',
-                    m.readBy?.[peerKey]
-                      ? 'text-violet-100'
-                      : m.deliveredBy?.[peerKey]
-                        ? 'text-violet-200/90'
-                        : 'text-violet-200/80'
-                  )}
-                >
-                  {m.readBy?.[peerKey] ? 'Read' : m.deliveredBy?.[peerKey] ? 'Delivered' : 'Sent'}
+      <div
+        className={cn(
+          'flex w-full max-w-[min(92%,720px)] gap-2.5 sm:max-w-[min(88%,680px)]',
+          mine ? 'flex-row-reverse' : 'flex-row'
+        )}
+      >
+        <Image
+          src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(avatarSeed || 'user')}`}
+          alt=""
+          width={36}
+          height={36}
+          unoptimized
+          className="h-9 w-9 shrink-0 self-end rounded-full border border-slate-200/80 bg-slate-50 object-cover dark:border-slate-600 dark:bg-slate-800"
+        />
+        <div className={cn('min-w-0 flex-1', mine ? 'flex flex-col items-end' : '')}>
+          <div
+            className={cn(
+              'mb-1 max-w-full text-[12px] text-slate-500 dark:text-slate-400',
+              mine ? 'pr-0.5 text-right' : 'pl-0.5'
+            )}
+          >
+            <span className="font-medium text-slate-600 dark:text-slate-300">{senderLabel}</span>
+            {isPinned ? <Pin className="ml-1 inline h-3 w-3 align-middle opacity-70" /> : null}
+            {mine ? (
+              <span
+                className={cn(
+                  'ml-2 text-[10px] font-semibold tracking-wide text-emerald-800/80 dark:text-emerald-200/80'
+                )}
+              >
+                {m.readBy?.[peerKey] ? 'Read' : m.deliveredBy?.[peerKey] ? 'Delivered' : 'Sent'}
+              </span>
+            ) : null}
+          </div>
+
+          <div className="relative inline-block max-w-full">
+            {isPollMessage ? (
+              <div className="max-w-[min(100%,420px)] overflow-hidden rounded-2xl border border-emerald-900/25 bg-emerald-900 text-white shadow-md dark:border-emerald-700/40 dark:bg-emerald-950">
+                <div className="border-b border-white/10 px-4 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-100/90">
+                      Poll
+                    </span>
+                    <div className="flex items-center gap-0.5">
+                      <button
+                        type="button"
+                        className="rounded-md p-1.5 text-emerald-100 transition hover:bg-white/10"
+                        onClick={() => setOpenReactionPickerId((prev) => (prev === m._id ? null : m._id))}
+                        aria-label="React to poll"
+                      >
+                        <SmilePlus className="h-4 w-4" />
+                      </button>
+                      <div className="relative" data-message-menu>
+                        <button
+                          type="button"
+                          className="rounded-md p-1.5 text-emerald-100 transition hover:bg-white/10"
+                          onClick={() => toggleMessageMenu(m._id)}
+                          aria-label="Poll actions"
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </button>
+                        {openMessageMenuId === m._id && (
+                          <div
+                            role="menu"
+                            className="anim-pop absolute right-0 top-full z-50 mt-1.5 min-w-[170px] overflow-hidden rounded-2xl border border-slate-200/90 bg-white py-1.5 shadow-xl dark:border-slate-700 dark:bg-slate-900"
+                          >
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-slate-800 hover:bg-violet-50 dark:text-slate-100 dark:hover:bg-slate-800"
+                              onClick={
+                                isPinned
+                                  ? () => {
+                                      handleUnpinDmMessage(m._id);
+                                      toggleMessageMenu(m._id);
+                                    }
+                                  : () => {
+                                      handlePinDmMessage(m);
+                                      toggleMessageMenu(m._id);
+                                    }
+                              }
+                            >
+                              {isPinned ? (
+                                <PinOff className="h-4 w-4 shrink-0 opacity-80" />
+                              ) : (
+                                <Pin className="h-4 w-4 shrink-0 opacity-80" />
+                              )}
+                              {isPinned ? 'Unpin' : 'Pin'}
+                            </button>
+                            {mine && (
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-slate-800 hover:bg-violet-50 dark:text-slate-100 dark:hover:bg-slate-800"
+                                onClick={() => handleDeleteForMe(m._id)}
+                              >
+                                <Trash2 className="h-4 w-4 shrink-0 opacity-80" />
+                                Delete for me
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              )}
-            </div>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                className={cn(
-                  'rounded-md p-1.5 transition',
-                  mine
-                    ? 'text-violet-100 hover:bg-white/15'
-                    : 'text-slate-500 hover:bg-slate-200/80 dark:text-slate-400 dark:hover:bg-slate-700/80'
-                )}
-                onClick={() => setOpenReactionPickerId((prev) => (prev === m._id ? null : m._id))}
-                aria-label="React to message"
-                title="React"
-              >
-                <SmilePlus className="h-4 w-4" />
-              </button>
-
-              <div className="relative -mr-1" data-message-menu>
-              <button
-                type="button"
-                className={cn(
-                  'rounded-md p-1.5 transition',
-                  mine
-                    ? 'text-violet-100 hover:bg-white/15'
-                    : 'text-slate-500 hover:bg-slate-200/80 dark:text-slate-400 dark:hover:bg-slate-700/80'
-                )}
-                onClick={() => toggleMessageMenu(m._id)}
-                aria-label="Message actions"
-              >
-                <MoreVertical className="h-4 w-4" />
-              </button>
-
-              {openMessageMenuId === m._id && (
-                <div
-                  role="menu"
-                  className="anim-pop absolute right-0 top-full z-50 mt-1.5 min-w-[170px] overflow-hidden rounded-2xl border border-slate-200/90 bg-white py-1.5 shadow-xl dark:border-slate-700 dark:bg-slate-900"
-                >
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-slate-800 transition-colors duration-150 hover:bg-violet-50 dark:text-slate-100 dark:hover:bg-slate-800"
-                    onClick={() => {
-                      toggleMessageMenu(m._id);
-                      setOpenReactionPickerId((prev) => (prev === m._id ? null : m._id));
-                    }}
-                  >
-                    <SmilePlus className="h-4 w-4 shrink-0 opacity-80" />
-                    React
-                  </button>
-                  {mine && (
-                    <>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-slate-800 transition-colors duration-150 hover:bg-violet-50 disabled:pointer-events-none disabled:opacity-60 dark:text-slate-100 dark:hover:bg-slate-800"
-                        onClick={() => handleEditMessage(m)}
-                        disabled={!canEditDelete}
-                      >
-                        <Pencil className="h-4 w-4 shrink-0 opacity-80" />
-                        Edit message
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-red-600 transition-colors duration-150 hover:bg-red-50 disabled:pointer-events-none disabled:opacity-60 dark:text-red-400 dark:hover:bg-red-950/40"
-                        onClick={() => {
-                          if (!canEditDelete) return;
-                          toggleMessageMenu(m._id);
-                          handleDeleteMessage(m._id);
-                        }}
-                        disabled={!canEditDelete || deletingMessageId === m._id}
-                      >
-                        <Trash2 className="h-4 w-4 shrink-0" />
-                        {deletingMessageId === m._id ? 'Unsending…' : 'Unsend message'}
-                      </button>
-                    </>
-                  )}
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-slate-800 transition-colors duration-150 hover:bg-violet-50 dark:text-slate-100 dark:hover:bg-slate-800"
-                    onClick={
-                      isPinned
-                        ? () => {
-                            handleUnpinDmMessage(m._id);
-                            toggleMessageMenu(m._id);
-                          }
-                        : () => {
-                            handlePinDmMessage(m);
-                            toggleMessageMenu(m._id);
-                          }
-                    }
-                  >
-                    {isPinned ? <PinOff className="h-4 w-4 shrink-0 opacity-80" /> : <Pin className="h-4 w-4 shrink-0 opacity-80" />}
-                    {isPinned ? 'Unpin message' : 'Pin message'}
-                  </button>
-                  {mine && (
+                <div className="px-4 py-3">
+                  <p className="text-sm font-semibold leading-snug text-white">{poll.q}</p>
+                  <ul className="mt-3 space-y-2.5">
+                    {poll.o.map((opt, i) => (
+                      <li key={i}>
+                        <div className="flex items-center justify-between gap-2 text-[11px] text-emerald-100/85">
+                          <span className="min-w-0 truncate font-medium">{opt}</span>
+                        </div>
+                        <div className="mt-1 h-2 overflow-hidden rounded-full bg-black/25">
+                          <div
+                            className="h-full rounded-full bg-emerald-300/90"
+                            style={{ width: `${Math.max(8, Math.round(100 / poll.o.length) + (i % 3) * 6)}%` }}
+                          />
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-3 text-[10px] text-emerald-200/70">Informal poll — counts are illustrative in chat.</p>
+                </div>
+              </div>
+            ) : (
+              <div className={cn('relative max-w-full px-3.5 py-2.5 text-sm', bubbleBase)}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1" />
+                  <div className="flex shrink-0 items-center gap-0.5">
                     <button
                       type="button"
-                      role="menuitem"
-                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-slate-800 transition-colors duration-150 hover:bg-violet-50 dark:text-slate-100 dark:hover:bg-slate-800"
-                      onClick={() => handleDeleteForMe(m._id)}
+                      className={cn('rounded-md p-1.5 transition', mine ? iconBtnMine : iconBtnTheirs)}
+                      onClick={() => setOpenReactionPickerId((prev) => (prev === m._id ? null : m._id))}
+                      aria-label="React to message"
+                      title="React"
                     >
-                      <Trash2 className="h-4 w-4 shrink-0 opacity-80" />
-                      Delete for me
+                      <SmilePlus className="h-4 w-4" />
                     </button>
-                  )}
-                </div>
-              )}
-              </div>
-            </div>
-          </div>
-          {m.mediaType === 'image' && m.mediaUrl ? (
-            <a href={m.mediaUrl} target="_blank" rel="noreferrer" className="mt-2 block">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={m.mediaUrl} alt={m.fileName || 'Shared image'} className="max-h-72 w-auto rounded-xl object-cover" />
-            </a>
-          ) : null}
-          {m.mediaType === 'video' && m.mediaUrl ? (
-            <video src={m.mediaUrl} controls className="mt-2 max-h-72 w-full rounded-xl bg-black" />
-          ) : null}
-          {m.mediaType === 'audio' && m.mediaUrl ? <audio src={m.mediaUrl} controls className="mt-2 w-full" /> : null}
-          {m.mediaType === 'file' && m.mediaUrl ? (
-            <a
-              href={m.mediaUrl}
-              target="_blank"
-              rel="noreferrer"
-              className={cn(
-                'mt-2 block rounded-xl border px-3 py-2 text-sm no-underline transition hover:brightness-[1.02]',
-                mine
-                  ? 'border-white/25 bg-white/10 text-white hover:bg-white/15'
-                  : 'border-slate-200/90 bg-white text-slate-800 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800'
-              )}
-            >
-              <div className="truncate font-semibold">{m.fileName || 'Download file'}</div>
-              <div className={cn('mt-0.5 text-xs opacity-80', mine ? 'text-violet-100' : 'text-slate-500')}>Open / download</div>
-            </a>
-          ) : null}
-          {(m.content || m.isDeleted) ? (
-            <p
-              className={cn(
-                'mt-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-relaxed',
-                m.isDeleted ? 'italic opacity-80' : mine ? 'text-white' : 'text-slate-800 dark:text-slate-100'
-              )}
-            >
-              {m.content}
-            </p>
-          ) : null}
-        </div>
+                    <div className="relative" data-message-menu>
+                      <button
+                        type="button"
+                        className={cn('rounded-md p-1.5 transition', mine ? iconBtnMine : iconBtnTheirs)}
+                        onClick={() => toggleMessageMenu(m._id)}
+                        aria-label="Message actions"
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </button>
 
-        <button
-          type="button"
-          data-reaction-picker
-          className={cn(
-            'absolute bottom-1 flex h-7 w-7 items-center justify-center rounded-full border border-slate-200/90 bg-white text-base shadow-sm transition',
-            'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100',
-            'dark:border-slate-600 dark:bg-slate-900',
-            mine ? 'left-[-36px]' : 'right-[-36px]'
-          )}
-          onClick={() => setOpenReactionPickerId((prev) => (prev === m._id ? null : m._id))}
-          title="React"
-        >
-          <SmilePlus className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
-        </button>
+                      {openMessageMenuId === m._id && (
+                        <div
+                          role="menu"
+                          className="anim-pop absolute right-0 top-full z-50 mt-1.5 min-w-[170px] overflow-hidden rounded-2xl border border-slate-200/90 bg-white py-1.5 shadow-xl dark:border-slate-700 dark:bg-slate-900"
+                        >
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-slate-800 transition-colors duration-150 hover:bg-violet-50 dark:text-slate-100 dark:hover:bg-slate-800"
+                            onClick={() => {
+                              toggleMessageMenu(m._id);
+                              setOpenReactionPickerId((prev) => (prev === m._id ? null : m._id));
+                            }}
+                          >
+                            <SmilePlus className="h-4 w-4 shrink-0 opacity-80" />
+                            React
+                          </button>
+                          {mine && menuPollSafe && (
+                            <>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-slate-800 transition-colors duration-150 hover:bg-violet-50 disabled:pointer-events-none disabled:opacity-60 dark:text-slate-100 dark:hover:bg-slate-800"
+                                onClick={() => handleEditMessage(m)}
+                                disabled={!canEditDelete}
+                              >
+                                <Pencil className="h-4 w-4 shrink-0 opacity-80" />
+                                Edit message
+                              </button>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-red-600 transition-colors duration-150 hover:bg-red-50 disabled:pointer-events-none disabled:opacity-60 dark:text-red-400 dark:hover:bg-red-950/40"
+                                onClick={() => {
+                                  if (!canEditDelete) return;
+                                  toggleMessageMenu(m._id);
+                                  handleDeleteMessage(m._id);
+                                }}
+                                disabled={!canEditDelete || deletingMessageId === m._id}
+                              >
+                                <Trash2 className="h-4 w-4 shrink-0" />
+                                {deletingMessageId === m._id ? 'Unsending…' : 'Unsend message'}
+                              </button>
+                            </>
+                          )}
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-slate-800 transition-colors duration-150 hover:bg-violet-50 dark:text-slate-100 dark:hover:bg-slate-800"
+                            onClick={
+                              isPinned
+                                ? () => {
+                                    handleUnpinDmMessage(m._id);
+                                    toggleMessageMenu(m._id);
+                                  }
+                                : () => {
+                                    handlePinDmMessage(m);
+                                    toggleMessageMenu(m._id);
+                                  }
+                            }
+                          >
+                            {isPinned ? (
+                              <PinOff className="h-4 w-4 shrink-0 opacity-80" />
+                            ) : (
+                              <Pin className="h-4 w-4 shrink-0 opacity-80" />
+                            )}
+                            {isPinned ? 'Unpin message' : 'Pin message'}
+                          </button>
+                          {mine && (
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-slate-800 transition-colors duration-150 hover:bg-violet-50 dark:text-slate-100 dark:hover:bg-slate-800"
+                              onClick={() => handleDeleteForMe(m._id)}
+                            >
+                              <Trash2 className="h-4 w-4 shrink-0 opacity-80" />
+                              Delete for me
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                {m.mediaType === 'image' && m.mediaUrl ? (
+                  <a href={m.mediaUrl} target="_blank" rel="noreferrer" className="mt-2 block">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={m.mediaUrl} alt={m.fileName || 'Shared image'} className="max-h-72 w-auto rounded-xl object-cover" />
+                  </a>
+                ) : null}
+                {m.mediaType === 'video' && m.mediaUrl ? (
+                  <video src={m.mediaUrl} controls className="mt-2 max-h-72 w-full rounded-xl bg-black" />
+                ) : null}
+                {m.mediaType === 'audio' && m.mediaUrl ? <audio src={m.mediaUrl} controls className="mt-2 w-full" /> : null}
+                {m.mediaType === 'file' && m.mediaUrl ? (
+                  <a
+                    href={m.mediaUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={cn(
+                      'mt-2 block rounded-xl border px-3 py-2 text-sm no-underline transition hover:brightness-[1.02]',
+                      mine
+                        ? 'border-emerald-800/30 bg-emerald-900/10 text-emerald-950 hover:bg-emerald-900/15 dark:border-emerald-400/20 dark:bg-white/5 dark:text-emerald-50'
+                        : 'border-slate-200/90 bg-slate-50 text-slate-800 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700'
+                    )}
+                  >
+                    <div className="truncate font-semibold">{m.fileName || 'Download file'}</div>
+                    <div
+                      className={cn(
+                        'mt-0.5 text-xs opacity-80',
+                        mine ? 'text-emerald-900/70 dark:text-emerald-100/70' : 'text-slate-500'
+                      )}
+                    >
+                      Open / download
+                    </div>
+                  </a>
+                ) : null}
+                {showPlainText ? (
+                  <p
+                    className={cn(
+                      'mt-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-relaxed',
+                      m.isDeleted
+                        ? 'italic opacity-80'
+                        : mine
+                          ? 'text-slate-800 dark:text-emerald-50'
+                          : 'text-slate-800 dark:text-slate-100'
+                    )}
+                  >
+                    {m.content}
+                  </p>
+                ) : null}
+              </div>
+            )}
+
+            {!isPollMessage ? (
+              <button
+                type="button"
+                data-reaction-picker
+                className={cn(
+                  'absolute -bottom-1 flex h-7 w-7 items-center justify-center rounded-full border border-slate-200/90 bg-white text-base shadow-sm transition',
+                  'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100',
+                  'dark:border-slate-600 dark:bg-slate-900',
+                  mine ? '-left-8' : '-right-8'
+                )}
+                onClick={() => setOpenReactionPickerId((prev) => (prev === m._id ? null : m._id))}
+                title="React"
+              >
+                <SmilePlus className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+              </button>
+            ) : null}
+          </div>
+        </div>
       </div>
 
       {openReactionPickerId === m._id && (
         <div
           data-reaction-picker
           className={cn(
-            'mt-1 flex gap-1 rounded-full border border-slate-200/90 bg-white px-2 py-1 shadow-md dark:border-slate-700 dark:bg-slate-900',
-            mine ? 'mr-8' : 'ml-8'
+            'mt-1.5 flex gap-1 rounded-full border border-slate-200/90 bg-white px-2 py-1 shadow-md dark:border-slate-700 dark:bg-slate-900',
+            mine ? 'mr-11 justify-end' : 'ml-11'
           )}
         >
           {EMOJI_OPTIONS.map((emoji) => (
@@ -339,7 +479,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
       )}
 
       {reactionEntries.length > 0 && (
-        <div className={cn('mt-1 flex flex-wrap gap-1', mine ? 'mr-8 justify-end' : 'ml-8')}>
+        <div className={cn('mt-1 flex flex-wrap gap-1', mine ? 'mr-11 justify-end' : 'ml-11')}>
           {reactionEntries.map(([emoji, users]) => {
             const count = Object.keys(users || {}).length;
             if (!count) return null;
@@ -351,13 +491,15 @@ const ChatMessageRow = memo(function ChatMessageRow({
                 className={cn(
                   'flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition',
                   reacted
-                    ? 'border-violet-400 bg-violet-50 dark:border-violet-500 dark:bg-violet-950/50'
+                    ? 'border-emerald-400 bg-emerald-50 dark:border-emerald-500 dark:bg-emerald-950/50'
                     : 'border-slate-200/90 bg-white dark:border-slate-700 dark:bg-slate-900'
                 )}
                 onClick={() => handleToggleDmReaction(m._id, emoji)}
               >
                 <span>{emoji}</span>
-                <span className={reacted ? 'text-violet-700 dark:text-violet-300' : 'text-slate-600 dark:text-slate-400'}>{count}</span>
+                <span className={reacted ? 'text-emerald-800 dark:text-emerald-300' : 'text-slate-600 dark:text-slate-400'}>
+                  {count}
+                </span>
               </button>
             );
           })}
@@ -403,6 +545,11 @@ export default function ChatDashboardPage() {
   const [pinnedMessages, setPinnedMessages] = useState([]);
   const [openReactionPickerId, setOpenReactionPickerId] = useState(null);
   const [chatHeaderMenuOpen, setChatHeaderMenuOpen] = useState(false);
+  const [pollModalOpen, setPollModalOpen] = useState(false);
+  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollOpt1, setPollOpt1] = useState('Option A');
+  const [pollOpt2, setPollOpt2] = useState('Option B');
+  const [pollOpt3, setPollOpt3] = useState('Option C');
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
@@ -410,6 +557,8 @@ export default function ChatDashboardPage() {
   const searchWrapRef = useRef(null);
   const searchInputRef = useRef(null);
   const mediaInputRef = useRef(null);
+  const mediaImageInputRef = useRef(null);
+  const composerInputRef = useRef(null);
   const messagesWrapRef = useRef(null);
   const shouldAutoScrollRef = useRef(true);
 
@@ -759,6 +908,42 @@ export default function ChatDashboardPage() {
       setInput('');
     } catch {
       setActionError('Could not send message. Please try again.');
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
+  const sendPollMessage = async () => {
+    const q = pollQuestion.trim();
+    const opts = [pollOpt1, pollOpt2, pollOpt3].map((s) => String(s || '').trim()).filter(Boolean);
+    if (!user?.id || !activeUserId.trim()) {
+      setActionError('Choose someone to chat with first.');
+      return;
+    }
+    if (!isUuid(activeUserId.trim())) {
+      setActionError('Select a user from search (peerId must be a UUID).');
+      return;
+    }
+    if (!q || opts.length < 2) {
+      setActionError('Add a question and at least two options.');
+      return;
+    }
+    const body = `${DM_POLL_PREFIX}${JSON.stringify({ q, o: opts })}`;
+    setSendingMessage(true);
+    setActionError('');
+    try {
+      await sendDirectMessage({
+        senderId: user.id,
+        receiverId: activeUserId.trim(),
+        content: body
+      });
+      setPollModalOpen(false);
+      setPollQuestion('');
+      setPollOpt1('Option A');
+      setPollOpt2('Option B');
+      setPollOpt3('Option C');
+    } catch {
+      setActionError('Could not send poll. Please try again.');
     } finally {
       setSendingMessage(false);
     }
@@ -1489,7 +1674,7 @@ export default function ChatDashboardPage() {
 
             <div
               ref={messagesWrapRef}
-              className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain bg-[#F9FAFB] px-3 py-3 dark:bg-slate-950/50 sm:px-5 sm:py-4"
+              className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain bg-white px-3 py-3 dark:bg-slate-950/80 sm:px-5 sm:py-4"
             >
               {messageLoadError && (
                 <div className="rounded-2xl border border-red-400/40 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">
@@ -1546,9 +1731,13 @@ export default function ChatDashboardPage() {
                         ) : null}
                         <ChatMessageRow
                           m={m}
-                          idx={idx}
                           mine={mine}
                           senderLabel={senderLabel}
+                          avatarSeed={
+                            mine
+                              ? user?.username || user?.id || 'you'
+                              : peerUsername || peerKey || 'peer'
+                          }
                           canEditDelete={canEditDelete}
                           isPinned={isPinned}
                           peerKey={peerKey}
@@ -1636,25 +1825,68 @@ export default function ChatDashboardPage() {
                 className="hidden"
                 onChange={handleSelectMedia}
               />
-              <div className="flex items-center gap-1 rounded-full border border-slate-200/90 bg-slate-50/90 px-2 py-1.5 shadow-sm dark:border-slate-700 dark:bg-slate-800/80 sm:gap-2 sm:px-3">
+              <input
+                ref={mediaImageInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleSelectMedia}
+              />
+              <div className="mb-2 flex flex-wrap items-center gap-0.5 border-b border-slate-100 pb-2 dark:border-slate-800">
                 <button
                   type="button"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-white hover:text-violet-600 dark:text-slate-400 dark:hover:bg-slate-700"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-emerald-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-emerald-400"
+                  title="Insert @"
+                  aria-label="Insert at mention"
+                  disabled={!activeUserId.trim() || isRecording}
+                  onClick={() => {
+                    composerInputRef.current?.focus();
+                    setInput((prev) => `${prev}@`);
+                  }}
+                >
+                  <AtSign className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-emerald-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-emerald-400"
                   aria-label="Attach file"
+                  disabled={!activeUserId.trim() || isRecording}
                   onClick={() => mediaInputRef.current?.click()}
                 >
-                  <Paperclip className="h-5 w-5" />
+                  <Paperclip className="h-4 w-4" />
                 </button>
+                <button
+                  type="button"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-emerald-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-emerald-400"
+                  aria-label="Attach image"
+                  disabled={!activeUserId.trim() || isRecording}
+                  onClick={() => mediaImageInputRef.current?.click()}
+                >
+                  <ImageIcon className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-emerald-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-emerald-400"
+                  title="Quick poll"
+                  aria-label="Send a poll"
+                  disabled={!activeUserId.trim() || isRecording || sendingMessage}
+                  onClick={() => setPollModalOpen(true)}
+                >
+                  <BarChart2 className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="flex items-center gap-1 rounded-2xl border border-slate-200/90 bg-slate-50/90 px-2 py-1.5 shadow-sm dark:border-slate-700 dark:bg-slate-800/80 sm:gap-2 sm:px-3">
                 <input
+                  ref={composerInputRef}
                   className="min-w-0 flex-1 border-0 bg-transparent px-2 text-sm text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100"
                   value={input}
                   onChange={handleTypingInput}
-                  placeholder={activeUserId.trim() ? 'Type a message…' : 'Choose someone to chat…'}
+                  placeholder={activeUserId.trim() ? 'Write your message…' : 'Choose someone to chat…'}
                   disabled={isRecording}
                 />
                 <button
                   type="button"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-white hover:text-violet-600 dark:text-slate-400 dark:hover:bg-slate-700"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-white hover:text-emerald-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-emerald-400"
                   title="Emoji"
                   aria-label="Emoji"
                   onClick={() => activeUserId.trim() && setOpenReactionPickerId(null)}
@@ -1673,7 +1905,7 @@ export default function ChatDashboardPage() {
                 ) : (
                   <button
                     type="button"
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-white hover:text-violet-600 dark:text-slate-400 dark:hover:bg-slate-700"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-white hover:text-emerald-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-emerald-400"
                     aria-label="Voice note"
                     onClick={handleStartRecording}
                   >
@@ -1683,13 +1915,75 @@ export default function ChatDashboardPage() {
                 <button
                   type="submit"
                   disabled={!activeUserId.trim() || !input.trim() || sendingMessage || isRecording}
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg shadow-violet-600/30 transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-45"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-lg shadow-emerald-600/25 transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-45"
                   aria-label="Send"
                 >
                   {sendingMessage ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
                 </button>
               </div>
             </form>
+
+            {pollModalOpen ? (
+              <div
+                className="fixed inset-0 z-[200] flex items-end justify-center bg-black/45 p-4 backdrop-blur-[2px] sm:items-center"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="dm-poll-title"
+                onClick={() => setPollModalOpen(false)}
+              >
+                <div
+                  className="w-full max-w-md rounded-2xl border border-slate-200/90 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <h3 id="dm-poll-title" className="text-base font-bold text-slate-900 dark:text-slate-50">
+                    Quick poll
+                  </h3>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    Sends a webinar-style poll card in this chat (stored as a message).
+                  </p>
+                  <label className="mt-3 block text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">
+                    Question
+                  </label>
+                  <input
+                    className="input mt-1.5 w-full text-sm"
+                    value={pollQuestion}
+                    onChange={(e) => setPollQuestion(e.target.value)}
+                    placeholder="Which option do you prefer?"
+                  />
+                  {['A', 'B', 'C'].map((label, i) => (
+                    <div key={label} className="mt-2">
+                      <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">
+                        Option {label}
+                      </label>
+                      <input
+                        className="input mt-1.5 w-full text-sm"
+                        value={i === 0 ? pollOpt1 : i === 1 ? pollOpt2 : pollOpt3}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (i === 0) setPollOpt1(v);
+                          else if (i === 1) setPollOpt2(v);
+                          else setPollOpt3(v);
+                        }}
+                      />
+                    </div>
+                  ))}
+                  <div className="mt-4 flex justify-end gap-2">
+                    <Button type="button" variant="secondary" size="sm" onClick={() => setPollModalOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="bg-emerald-600 hover:bg-emerald-700"
+                      disabled={sendingMessage || !activeUserId.trim()}
+                      onClick={() => sendPollMessage()}
+                    >
+                      Send poll
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
             {actionError && (
               <div className="border-t border-slate-200/80 px-4 py-2 text-xs text-red-600 dark:border-slate-800 dark:text-red-400">

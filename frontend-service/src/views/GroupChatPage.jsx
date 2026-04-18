@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useAuth } from '../hooks/useAuth';
@@ -29,11 +30,41 @@ import {
   subscribePinnedGroupMessages,
   subscribeRecentDirectChats
 } from '../services/chatClient';
-import { Download, Upload, BellOff, Camera, LogOut, MessageSquare, MoreVertical, Pin, PinOff, Search, Send, SmilePlus, Trash2, UserPlus, Users, X } from 'lucide-react';
+import { Download, Upload, BellOff, Camera, Loader2, LogOut, MessageSquare, MoreVertical, Pin, PinOff, Search, Send, SmilePlus, Trash2, UserPlus, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ChatAppShell } from '@/components/ChatAppShell';
 import { ChatAppIconRail } from '@/components/ChatAppIconRail';
 import { cn } from '@/lib/utils';
+
+function formatGroupMessageTime(ts) {
+  const n = Number(ts || 0);
+  if (!n) return '';
+  const d = new Date(n);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function linkifyGroupMessage(text) {
+  if (text == null || text === '') return null;
+  const str = String(text);
+  const parts = str.split(/(https?:\/\/\S+)/);
+  return parts.map((part, i) => {
+    if (/^https?:\/\//.test(part)) {
+      return (
+        <a
+          key={i}
+          href={part}
+          target="_blank"
+          rel="noreferrer"
+          className="font-medium text-violet-600 underline decoration-violet-400/70 underline-offset-2 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300"
+        >
+          {part}
+        </a>
+      );
+    }
+    return <span key={i}>{part}</span>;
+  });
+}
 
 export default function GroupChatPage() {
   const { user } = useAuth();
@@ -72,7 +103,6 @@ export default function GroupChatPage() {
   const groupMenuRef = useRef(null);
   const EMOJI_OPTIONS = ['👍', '❤️', '😂', '😮', '😢', '👏'];
   const [groupMsgSearch, setGroupMsgSearch] = useState('');
-  const [groupMsgSearchOpen, setGroupMsgSearchOpen] = useState(false);
   const [groupTypingUsers, setGroupTypingUsers] = useState([]);
   const [groupPinnedMessages, setGroupPinnedMessages] = useState([]);
   const [openGroupReactionPickerId, setOpenGroupReactionPickerId] = useState(null);
@@ -110,7 +140,7 @@ export default function GroupChatPage() {
   const groupMessageVirtualizer = useVirtualizer({
     count: filteredMessages.length,
     getScrollElement: () => messagesWrapRef.current,
-    estimateSize: () => 80,
+    estimateSize: () => 96,
     overscan: 12,
     getItemKey: (index) => filteredMessages[index]?._id ?? `grp-row-${index}`,
   });
@@ -119,104 +149,112 @@ export default function GroupChatPage() {
     () =>
       memo(function GroupMessageRow({
         m,
-        idx,
         mine,
         senderName,
+        avatarSeed,
         isPinned,
         readCount,
         memberCount,
       }) {
         const reactionEntries = Object.entries(m.reactions || {});
+        const t = formatGroupMessageTime(m.createdAt);
+        const bubble = mine
+          ? 'border-violet-200/90 bg-violet-100/95 text-slate-900 shadow-sm dark:border-violet-500/35 dark:bg-violet-950/45 dark:text-slate-100'
+          : 'border-slate-200/90 bg-slate-100/95 text-slate-900 shadow-sm dark:border-slate-600 dark:bg-slate-800/90 dark:text-slate-100';
+        const iconMine = 'text-violet-800/80 hover:bg-violet-200/60 dark:text-violet-200/90 dark:hover:bg-white/10';
+        const iconTheirs = 'text-slate-600 hover:bg-slate-200/80 dark:text-slate-300 dark:hover:bg-slate-700/50';
+
         return (
           <div className={cn('group flex w-full flex-col', mine ? 'items-end' : 'items-start')}>
-            <div className="relative flex items-end">
-              <div
-                className={cn(
-                  'w-full max-w-[85%] rounded-xl border px-3 py-2 text-sm sm:max-w-[72%]',
-                  mine
-                    ? 'border-emerald-200 bg-emerald-100 text-emerald-950 dark:border-emerald-500/25 dark:bg-emerald-500/15 dark:text-slate-50'
-                    : 'border-slate-200 bg-slate-100 text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-50'
-                )}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div
-                    className={cn(
-                      'text-xs font-medium',
-                      mine ? 'text-emerald-700/85 dark:text-emerald-200/85' : 'text-slate-600/85 dark:text-slate-300/85'
-                    )}
-                  >
-                    {senderName}
-                    {isPinned && <Pin className="ml-1 inline h-2.5 w-2.5 opacity-70" />}
-                    {mine && memberCount > 1 && (
-                      <div className="mt-0.5 text-[10px] font-semibold tracking-wide text-emerald-700/70 dark:text-emerald-200/70">
-                        {readCount > 0 ? `Read by ${readCount}/${memberCount - 1}` : 'Sent'}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {(mine || isGroupAdmin) && (
-                      <button
-                        type="button"
-                        className={cn(
-                          'rounded-md p-1 transition',
-                          mine
-                            ? 'text-emerald-700/90 hover:bg-emerald-200/70 dark:text-emerald-200/90 dark:hover:bg-emerald-500/20'
-                            : 'text-slate-600 hover:bg-slate-100/80 dark:text-slate-300 dark:hover:bg-slate-700/40'
-                        )}
-                        onClick={() => (isPinned ? handleUnpinGroupMessage(m._id) : handlePinGroupMessage(m))}
-                        title={isPinned ? 'Unpin' : 'Pin'}
-                      >
-                        {isPinned ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
-                      </button>
-                    )}
-                    {mine && (
-                      <button
-                        type="button"
-                        className={cn(
-                          'rounded-md p-1 transition',
-                          'text-emerald-700/90 hover:bg-emerald-200/70 dark:text-emerald-200/90 dark:hover:bg-emerald-500/20'
-                        )}
-                        onClick={() => handleDeleteGroupMessage(m._id)}
-                        disabled={deletingMessageId === m._id}
-                        aria-label="Delete message"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
+            <div
+              className={cn(
+                'flex w-full max-w-[min(92%,640px)] gap-2.5',
+                mine ? 'flex-row-reverse' : 'flex-row'
+              )}
+            >
+              <Image
+                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(avatarSeed || 'member')}`}
+                alt=""
+                width={32}
+                height={32}
+                unoptimized
+                className="h-8 w-8 shrink-0 self-end rounded-full border border-slate-200/80 bg-white object-cover dark:border-slate-600 dark:bg-slate-800"
+              />
+              <div className={cn('min-w-0 flex-1', mine ? 'flex flex-col items-end' : '')}>
                 <div
                   className={cn(
-                    'mt-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]',
-                    mine ? 'text-emerald-950 dark:text-slate-50' : 'text-slate-900 dark:text-slate-50'
+                    'mb-1 max-w-full text-[11px] text-slate-500 dark:text-slate-400',
+                    mine ? 'text-right' : 'text-left'
                   )}
                 >
-                  {m.message}
+                  <span className="font-semibold text-slate-600 dark:text-slate-300">{senderName}</span>
+                  {t ? <span className="text-slate-400 dark:text-slate-500"> · {t}</span> : null}
+                  {isPinned ? <Pin className="ml-1 inline h-3 w-3 align-middle opacity-70" /> : null}
+                  {mine && memberCount > 1 ? (
+                    <span className="ml-2 text-[10px] font-medium text-violet-600/90 dark:text-violet-300/90">
+                      {readCount > 0 ? `Read ${readCount}/${memberCount - 1}` : 'Sent'}
+                    </span>
+                  ) : null}
+                </div>
+
+                <div className="relative inline-block max-w-full">
+                  <div className={cn('rounded-[1.15rem] px-3.5 py-2.5 text-sm leading-relaxed', bubble, mine ? 'rounded-tr-md' : 'rounded-tl-md')}>
+                    {(mine || isGroupAdmin) && (
+                      <div className="mb-1.5 flex items-start justify-end gap-1">
+                        <div className="flex shrink-0 items-center gap-0.5">
+                          {(mine || isGroupAdmin) && (
+                            <button
+                              type="button"
+                              className={cn('rounded-lg p-1 transition', mine ? iconMine : iconTheirs)}
+                              onClick={() => (isPinned ? handleUnpinGroupMessage(m._id) : handlePinGroupMessage(m))}
+                              title={isPinned ? 'Unpin' : 'Pin'}
+                            >
+                              {isPinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+                            </button>
+                          )}
+                          {mine && (
+                            <button
+                              type="button"
+                              className={cn('rounded-lg p-1 transition', iconMine)}
+                              onClick={() => handleDeleteGroupMessage(m._id)}
+                              disabled={deletingMessageId === m._id}
+                              aria-label="Delete message"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] pr-1">
+                      {linkifyGroupMessage(m.message)}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    data-group-reaction-picker
+                    className={cn(
+                      'absolute -bottom-0.5 flex h-7 w-7 items-center justify-center rounded-full border border-slate-200/90 bg-white text-base shadow-md transition',
+                      'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100',
+                      'dark:border-slate-600 dark:bg-slate-900',
+                      mine ? '-left-8' : '-right-8'
+                    )}
+                    onClick={() => setOpenGroupReactionPickerId((prev) => (prev === m._id ? null : m._id))}
+                    title="React"
+                  >
+                    <SmilePlus className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+                  </button>
                 </div>
               </div>
-
-              <button
-                type="button"
-                data-group-reaction-picker
-                className={cn(
-                  'absolute bottom-1 flex h-7 w-7 items-center justify-center rounded-full border border-slate-200/80 bg-white text-base shadow transition',
-                  'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100',
-                  'dark:border-slate-700 dark:bg-slate-950',
-                  mine ? 'left-[-36px]' : 'right-[-36px]'
-                )}
-                onClick={() => setOpenGroupReactionPickerId((prev) => (prev === m._id ? null : m._id))}
-                title="React"
-              >
-                <SmilePlus className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
-              </button>
             </div>
 
             {openGroupReactionPickerId === m._id && (
               <div
                 data-group-reaction-picker
                 className={cn(
-                  'mt-1 flex gap-1 rounded-full border border-slate-200/80 bg-white px-2 py-1 shadow-md dark:border-slate-700 dark:bg-slate-950',
-                  mine ? 'mr-8' : 'ml-8'
+                  'mt-1.5 flex gap-1 rounded-full border border-slate-200/80 bg-white px-2 py-1 shadow-md dark:border-slate-700 dark:bg-slate-950',
+                  mine ? 'mr-10 justify-end' : 'ml-10'
                 )}
               >
                 {EMOJI_OPTIONS.map((emoji) => (
@@ -233,7 +271,7 @@ export default function GroupChatPage() {
             )}
 
             {reactionEntries.length > 0 && (
-              <div className={cn('mt-1 flex flex-wrap gap-1', mine ? 'mr-8 justify-end' : 'ml-8')}>
+              <div className={cn('mt-1 flex flex-wrap gap-1', mine ? 'mr-10 justify-end' : 'ml-10')}>
                 {reactionEntries.map(([emoji, users]) => {
                   const count = Object.keys(users || {}).length;
                   if (!count) return null;
@@ -780,21 +818,18 @@ export default function GroupChatPage() {
               </Button>
             </div>
 
-            <div className="mb-3 flex gap-4 border-b border-slate-200/80 pb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:text-slate-500">
+            <div className="mb-3 flex rounded-full border border-slate-200/80 bg-slate-100/90 p-0.5 dark:border-slate-700 dark:bg-slate-800/80">
               <Link
                 href="/dashboard"
-                className="transition hover:text-violet-600 dark:hover:text-violet-400"
+                className="flex-1 rounded-full px-2 py-2 text-center text-[11px] font-bold uppercase tracking-wide text-slate-600 transition hover:text-violet-600 dark:text-slate-400 dark:hover:text-violet-400 sm:px-3"
               >
-                Direct
+                Personal
               </Link>
-              <span className="relative text-violet-600 dark:text-violet-400">
-                Groups
-                <span className="absolute -right-2.5 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-red-500" />
-              </span>
-              <span className="cursor-not-allowed opacity-40" title="Coming soon">
-                Public
+              <span className="flex-1 rounded-full bg-violet-600 px-2 py-2 text-center text-[11px] font-bold uppercase tracking-wide text-white shadow-sm shadow-violet-600/25 sm:px-3">
+                Group
               </span>
             </div>
+            <p className="mb-2 text-[10px] text-slate-400 dark:text-slate-500">Public channels — coming soon</p>
 
             {groupSearchOpen && (
               <div className="anim-pop absolute left-3 right-3 top-full z-[60] mt-2 overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-3 shadow-xl dark:border-slate-700 dark:bg-slate-950">
@@ -945,28 +980,21 @@ export default function GroupChatPage() {
 
         <section className="flex min-h-0 flex-1 flex-col overflow-hidden border-b border-slate-200/80 bg-white dark:border-slate-800 dark:bg-slate-900 lg:border-b-0">
           <div className="shrink-0 border-b border-slate-200/80 px-4 py-3 dark:border-slate-800">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <MessageSquare className="h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />
-                <div>
-                  <div className="text-sm font-semibold text-slate-900 dark:text-slate-50">Messages</div>
-                  <div className="text-xs text-slate-700/70 dark:text-slate-300/80">
-                    {messages.length} total {groupId.trim() ? `• ${groupMembers.length} members` : ''}
-                    {groupMuted ? ' • muted' : ''}
-                  </div>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />
+                  <h2 className="truncate text-base font-bold text-slate-900 dark:text-slate-50">
+                    {groupId.trim() ? groupId.trim() : 'Group chat'}
+                  </h2>
                 </div>
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                  {messages.length} messages
+                  {groupId.trim() ? ` · ${groupMembers.length} members` : ''}
+                  {groupMuted ? ' · muted' : ''}
+                </p>
               </div>
-              <div className="flex items-center gap-1">
-                <Button
-                  type="button"
-                  size="icon"
-                  variant={groupMsgSearchOpen ? 'default' : 'ghost'}
-                  className="h-8 w-8"
-                  onClick={() => setGroupMsgSearchOpen((o) => !o)}
-                  aria-label="Search messages"
-                >
-                  <Search className="h-4 w-4" />
-                </Button>
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
                 <Button
                   type="button"
                   size="sm"
@@ -1044,20 +1072,19 @@ export default function GroupChatPage() {
               </div>
               </div>
             </div>
-          </div>
 
-          {/* Group message search bar */}
-          {groupMsgSearchOpen && groupId.trim() && (
-            <div className="shrink-0 border-b border-slate-200/80 bg-slate-50/80 px-4 py-2 dark:border-slate-800 dark:bg-slate-900/80">
+            <div className="relative mt-3">
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
-                autoFocus
-                className="input py-1.5 text-sm"
-                placeholder="Search messages…"
+                className="w-full rounded-full border border-slate-200/90 bg-slate-50/90 py-2.5 pl-10 pr-3 text-sm text-slate-800 outline-none ring-violet-500/20 placeholder:text-slate-400 focus:border-violet-400 focus:ring-2 dark:border-slate-600 dark:bg-slate-800/60 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-violet-500"
+                placeholder="Search message…"
                 value={groupMsgSearch}
                 onChange={(e) => setGroupMsgSearch(e.target.value)}
+                disabled={!groupId.trim()}
+                aria-label="Search messages in this group"
               />
             </div>
-          )}
+          </div>
 
           {/* Group pinned messages banner */}
           {groupPinnedMessages.length > 0 && groupId.trim() && (
@@ -1089,7 +1116,7 @@ export default function GroupChatPage() {
 
           <div
             ref={messagesWrapRef}
-            className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain bg-slate-50/40 px-4 py-4 dark:bg-slate-950/40"
+            className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain bg-white px-4 py-4 dark:bg-slate-950/80"
           >
             {messagesLoadError && (
               <div className="rounded-xl border border-red-400/40 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">
@@ -1119,7 +1146,6 @@ export default function GroupChatPage() {
               >
                 {groupMessageVirtualizer.getVirtualItems().map((virtualRow) => {
                   const m = filteredMessages[virtualRow.index];
-                  const idx = virtualRow.index;
                   const mine = m.senderId === user?.id;
                   const senderName =
                     mine ? user?.username || 'You' : senderNamesById[m.senderId] || 'Group member';
@@ -1137,9 +1163,9 @@ export default function GroupChatPage() {
                     >
                       <MessageRow
                         m={m}
-                        idx={idx}
                         mine={mine}
                         senderName={senderName}
+                        avatarSeed={mine ? user?.username || user?.id || 'you' : senderName || m.senderId || 'member'}
                         isPinned={isPinned}
                         readCount={readCount}
                         memberCount={memberCount}
@@ -1166,19 +1192,26 @@ export default function GroupChatPage() {
           )}
 
           <form
-            className="flex shrink-0 gap-2 border-t border-slate-200/80 bg-white/80 p-3 dark:border-slate-800 dark:bg-slate-950/70"
+            className="shrink-0 border-t border-slate-200/80 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 sm:p-4"
             onSubmit={handleSendGroupMessage}
           >
-            <input
-              className="input"
-              value={message}
-              onChange={handleGroupMessageInput}
-              placeholder={groupId.trim() ? 'Type a message…' : 'Open a group first…'}
-            />
-            <Button className="whitespace-nowrap" type="submit" disabled={!groupId || !message || !isMember || sending}>
-              <Send className="mr-2 h-4 w-4" />
-              {sending ? 'Sending…' : 'Send'}
-            </Button>
+            <div className="flex items-center gap-2 rounded-2xl border border-slate-200/90 bg-slate-50/90 px-2 py-1.5 shadow-sm dark:border-slate-700 dark:bg-slate-800/80 sm:px-3">
+              <input
+                className="min-w-0 flex-1 border-0 bg-transparent px-2 py-2 text-sm text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100"
+                value={message}
+                onChange={handleGroupMessageInput}
+                placeholder={groupId.trim() ? 'Write a message…' : 'Open a group first…'}
+                disabled={!groupId.trim() || !isMember}
+              />
+              <button
+                type="submit"
+                disabled={!groupId || !message.trim() || !isMember || sending}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-md shadow-violet-600/25 transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-45"
+                aria-label="Send"
+              >
+                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </button>
+            </div>
           </form>
           {(panelError || panelSuccess) && (
             <div className="border-t border-slate-200/80 px-4 py-2 text-xs dark:border-slate-800">

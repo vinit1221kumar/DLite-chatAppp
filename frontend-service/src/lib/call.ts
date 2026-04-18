@@ -51,7 +51,7 @@ export async function startCall(params: {
   socket.emit('call_user', {
     toUserId: calleeId,
     callType: mode,
-    offer,
+    offer: offer.type && offer.sdp ? { type: offer.type, sdp: offer.sdp } : offer,
   })
 }
 
@@ -65,14 +65,21 @@ export function listenForIncomingCall(userId: string, onIncoming: (payload: Offe
       if (disposed) return
 
       const handler = (payload: any) => {
-        if (!payload) return onIncoming(null)
+        if (!payload) {
+          onIncoming(null)
+          return
+        }
+        const offerObj = payload.offer || {}
+        const sdp = String(offerObj.sdp || '')
+        const type = offerObj.type as RTCSdpType | undefined
+        if (!sdp || !type) return
         onIncoming({
           fromUserId: String(payload.fromUserId || ''),
           mode: payload.callType === 'video' ? 'video' : 'audio',
           type: 'offer',
-          sdp: payload.offer?.sdp || '',
+          sdp,
           createdAt: Date.now(),
-        } as any)
+        } as OfferPayload)
       }
 
       socket.on('call_user', handler)
@@ -90,30 +97,199 @@ export function listenForIncomingCall(userId: string, onIncoming: (payload: Offe
   }
 }
 
+export function listenForAnswer(
+  userId: string,
+  onAnswer: (payload: AnswerPayload | null) => void,
+  filter?: { fromUserId?: string }
+) {
+  let disposed = false
+  let detach: () => void = () => undefined
+
+  ;(async () => {
+    try {
+      const socket = await ensureCallSocket(userId)
+      if (disposed) return
+
+      const handler = (payload: any) => {
+        if (!payload) return
+        const fromUserId = String(payload.fromUserId || '')
+        if (filter?.fromUserId && fromUserId !== filter.fromUserId) return
+        const ans = payload.answer || {}
+        const sdp = String(ans.sdp || '')
+        const type = ans.type as RTCSdpType | undefined
+        if (!sdp || !type) return
+        onAnswer({
+          fromUserId,
+          type,
+          sdp,
+          createdAt: Date.now(),
+        })
+      }
+
+      socket.on('call_answer', handler)
+      detach = () => {
+        socket.off('call_answer', handler)
+      }
+    } catch {
+      /* ignore */
+    }
+  })()
+
+  return () => {
+    disposed = true
+    detach()
+  }
+}
+
+export function listenForRejection(
+  userId: string,
+  onRejected: (payload: { byUserId: string; createdAt: number } | null) => void,
+  filter?: { fromUserId?: string }
+) {
+  let disposed = false
+  let detach: () => void = () => undefined
+
+  ;(async () => {
+    try {
+      const socket = await ensureCallSocket(userId)
+      if (disposed) return
+
+      const handler = (payload: any) => {
+        if (!payload) return
+        const fromUserId = String(payload.fromUserId || '')
+        if (filter?.fromUserId && fromUserId !== filter.fromUserId) return
+        onRejected({ byUserId: fromUserId, createdAt: Date.now() })
+      }
+
+      socket.on('call_rejected', handler)
+      detach = () => {
+        socket.off('call_rejected', handler)
+      }
+    } catch {
+      /* ignore */
+    }
+  })()
+
+  return () => {
+    disposed = true
+    detach()
+  }
+}
+
+export function listenForCallEnded(
+  userId: string,
+  onEnded: (payload: { fromUserId: string; reason: string } | null) => void,
+  filter?: { fromUserId?: string }
+) {
+  let disposed = false
+  let detach: () => void = () => undefined
+
+  ;(async () => {
+    try {
+      const socket = await ensureCallSocket(userId)
+      if (disposed) return
+
+      const handler = (payload: any) => {
+        if (!payload) return
+        const fromUserId = String(payload.fromUserId || '')
+        if (filter?.fromUserId && fromUserId !== filter.fromUserId) return
+        onEnded({
+          fromUserId,
+          reason: String(payload.reason || 'ended'),
+        })
+      }
+
+      socket.on('call_ended', handler)
+      detach = () => {
+        socket.off('call_ended', handler)
+      }
+    } catch {
+      /* ignore */
+    }
+  })()
+
+  return () => {
+    disposed = true
+    detach()
+  }
+}
+
 export async function acceptCall(params: { userId: string; callerId: string; answer: RTCSessionDescriptionInit }) {
   const socket = await ensureCallSocket(params.userId)
-  socket.emit('accept_call', { callId: undefined, answer: params.answer })
+  const a = params.answer
+  socket.emit('accept_call', {
+    toUserId: params.callerId,
+    answer: a?.type && a?.sdp ? { type: a.type, sdp: a.sdp } : a,
+  })
 }
 
 export async function rejectCall(params: { userId: string; callerId: string }) {
   const socket = await ensureCallSocket(params.userId)
-  socket.emit('reject_call', { callId: undefined, reason: 'rejected' })
+  socket.emit('reject_call', { toUserId: params.callerId, reason: 'rejected' })
 }
 
-export function listenForAnswer(_userId: string, _onAnswer: (payload: AnswerPayload | null) => void) {
-  return () => undefined
+export async function publishIceCandidate(params: {
+  targetUserId: string
+  fromUserId: string
+  candidate: IceCandidatePayload
+}) {
+  const { targetUserId, fromUserId, candidate } = params
+  const socket = await ensureCallSocket(fromUserId)
+  socket.emit('ice_candidate', {
+    toUserId: targetUserId,
+    candidate: {
+      candidate: candidate.candidate,
+      sdpMid: candidate.sdpMid,
+      sdpMLineIndex: candidate.sdpMLineIndex,
+      usernameFragment: candidate.usernameFragment ?? null,
+    },
+  })
 }
 
-export function listenForRejection(_userId: string, _onRejected: (payload: { byUserId: string; createdAt: number } | null) => void) {
-  return () => undefined
-}
+export function listenForIceCandidates(params: {
+  userId: string
+  fromUserId: string
+  onCandidate: (payload: IceCandidatePayload) => void
+}) {
+  const { userId, fromUserId, onCandidate } = params
+  let disposed = false
+  let detach: () => void = () => undefined
 
-export async function publishIceCandidate(_params: { targetUserId: string; fromUserId: string; candidate: IceCandidatePayload }) {
-  return
-}
+  ;(async () => {
+    try {
+      const socket = await ensureCallSocket(userId)
+      if (disposed) return
 
-export function listenForIceCandidates(_params: { userId: string; fromUserId: string; onCandidate: (payload: IceCandidatePayload) => void }) {
-  return () => undefined
+        const handler = (payload: any) => {
+        if (!payload) return
+        const fid = String(payload.fromUserId || '')
+        if (fid !== fromUserId) return
+        const c = payload.candidate || {}
+        const cand = String(c.candidate ?? '')
+        if (!cand) return
+        onCandidate({
+          fromUserId: fid,
+          candidate: cand,
+          sdpMid: c.sdpMid ?? null,
+          sdpMLineIndex: c.sdpMLineIndex ?? null,
+          usernameFragment: c.usernameFragment ?? null,
+          createdAt: Date.now(),
+        })
+      }
+
+      socket.on('call_ice_candidate', handler)
+      detach = () => {
+        socket.off('call_ice_candidate', handler)
+      }
+    } catch {
+      /* ignore */
+    }
+  })()
+
+  return () => {
+    disposed = true
+    detach()
+  }
 }
 
 export async function clearIceCandidates(_userId?: string, _fromUserId?: string) {
@@ -122,7 +298,10 @@ export async function clearIceCandidates(_userId?: string, _fromUserId?: string)
 
 export async function endCall(params: { userId: string; peerUserId?: string | null }) {
   const socket = await ensureCallSocket(params.userId)
-  socket.emit('end_call', { callId: undefined, reason: 'ended' })
+  const peer = params.peerUserId?.trim()
+  if (peer) {
+    socket.emit('end_call', { toUserId: peer, reason: 'ended' })
+  }
 }
 
 export async function hasActiveIncomingOffer() {

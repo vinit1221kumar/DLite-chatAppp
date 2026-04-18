@@ -188,5 +188,78 @@ def create_socket_app(*, cors_allowed_origins: list[str] | str, other_asgi_app=N
             room=user_room(to_uid),
         )
 
+    @sio.event
+    async def accept_call(sid, data):
+        """Relay SDP answer from callee to caller."""
+        session = await sio.get_session(sid)
+        from_uid = (session or {}).get("userId")
+        if not from_uid:
+            return
+        payload = data or {}
+        to_uid = str(payload.get("toUserId") or "").strip()
+        answer = payload.get("answer")
+        if not to_uid or to_uid == str(from_uid) or not answer:
+            return
+        await sio.emit(
+            "call_answer",
+            {"fromUserId": str(from_uid), "answer": answer},
+            room=user_room(to_uid),
+        )
+
+    @sio.event
+    async def reject_call(sid, data):
+        session = await sio.get_session(sid)
+        from_uid = (session or {}).get("userId")
+        if not from_uid:
+            return
+        payload = data or {}
+        to_uid = str(payload.get("toUserId") or "").strip()
+        if not to_uid or to_uid == str(from_uid):
+            return
+        await sio.emit(
+            "call_rejected",
+            {
+                "fromUserId": str(from_uid),
+                "reason": str(payload.get("reason") or "rejected"),
+            },
+            room=user_room(to_uid),
+        )
+
+    @sio.event
+    async def ice_candidate(sid, data):
+        session = await sio.get_session(sid)
+        from_uid = (session or {}).get("userId")
+        if not from_uid:
+            return
+        payload = data or {}
+        to_uid = str(payload.get("toUserId") or "").strip()
+        candidate = payload.get("candidate")
+        if not to_uid or to_uid == str(from_uid) or candidate is None:
+            return
+        await sio.emit(
+            "call_ice_candidate",
+            {"fromUserId": str(from_uid), "candidate": candidate},
+            room=user_room(to_uid),
+        )
+
+    @sio.event
+    async def end_call(sid, data):
+        session = await sio.get_session(sid)
+        from_uid = (session or {}).get("userId")
+        if not from_uid:
+            return
+        payload = data or {}
+        to_uid = str(payload.get("toUserId") or "").strip()
+        if not to_uid or to_uid == str(from_uid):
+            return
+        await sio.emit(
+            "call_ended",
+            {
+                "fromUserId": str(from_uid),
+                "reason": str(payload.get("reason") or "ended"),
+            },
+            room=user_room(to_uid),
+        )
+
     return socketio.ASGIApp(sio, other_asgi_app=other_asgi_app, socketio_path="socket.io")
 
