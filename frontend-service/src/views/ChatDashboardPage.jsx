@@ -38,7 +38,6 @@ import {
   AtSign,
   BarChart2,
   ChevronDown,
-  ChevronLeft,
   ChevronUp,
   FileText,
   Film,
@@ -62,6 +61,7 @@ import {
   Tag,
   Upload,
   User,
+  Users,
   Pin,
   PinOff,
   MoreVertical,
@@ -77,6 +77,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { ChatAppShell } from '@/components/ChatAppShell';
 import { ChatAppIconRail } from '@/components/ChatAppIconRail';
+import { ChatAppTopBar } from '@/components/ChatAppTopBar';
 import { ComposerOverflowMenu, composerMenuItemClass } from '@/components/ComposerOverflowMenu';
 
 function sameCalendarDay(aMs, bMs) {
@@ -103,18 +104,6 @@ function formatDaySeparator(ts) {
     day: 'numeric',
     ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}),
   });
-}
-
-function formatSessionDivider(ts) {
-  if (!ts) return '';
-  const d = new Date(Number(ts));
-  if (Number.isNaN(d.getTime())) return '';
-  return `Session · ${d.toLocaleDateString(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })}`;
 }
 
 function formatMessageMetaTime(ts) {
@@ -175,12 +164,9 @@ const ChatMessageRow = memo(function ChatMessageRow({
   const isPollMessage = Boolean(poll);
   const showPlainText = !isPollMessage && (m.content || m.isDeleted);
 
-  const bubbleBase = mine
-    ? 'rounded-[1.25rem] rounded-tr-md border border-ui-bubble-mine-border bg-ui-bubble-mine text-slate-900 shadow-sm dark:text-slate-100'
-    : 'rounded-[1.25rem] rounded-tl-md border border-ui-bubble-other-border bg-ui-bubble-other text-slate-900 shadow-sm dark:text-slate-100';
+  const bubbleBase = mine ? 'chat-bubble-sent' : 'chat-bubble-received';
 
-  const iconBtnMine =
-    'text-ui-accent hover:bg-ui-accent-subtle dark:text-ui-accent-text dark:hover:bg-white/10';
+  const iconBtnMine = 'text-white/90 hover:bg-white/15';
   const iconBtnTheirs =
     'text-slate-500 hover:bg-slate-200/80 dark:text-slate-400 dark:hover:bg-slate-700/80';
 
@@ -205,24 +191,26 @@ const ChatMessageRow = memo(function ChatMessageRow({
         <div className={cn('min-w-0 flex-1', mine ? 'flex flex-col items-end' : '')}>
           <div
             className={cn(
-              'mb-1 max-w-full text-[12px] text-slate-500 dark:text-slate-400',
-              mine ? 'pr-0.5 text-right' : 'pl-0.5'
+              'mb-1 max-w-full text-[12px]',
+              mine
+                ? 'pr-0.5 text-right text-white/75'
+                : 'pl-0.5 text-slate-500 dark:text-slate-400'
             )}
           >
-            <span className="font-medium text-slate-600 dark:text-slate-300">{senderLabel}</span>
+            <span
+              className={cn('font-medium', mine ? 'text-white/95' : 'text-slate-600 dark:text-slate-300')}
+            >
+              {senderLabel}
+            </span>
             {m.createdAt ? (
-              <span className="font-normal text-slate-400 dark:text-slate-500">
+              <span className={cn('font-normal', mine ? 'text-white/65' : 'text-slate-400 dark:text-slate-500')}>
                 {' '}
                 · {formatMessageMetaTime(m.createdAt)}
               </span>
             ) : null}
             {isPinned ? <Pin className="ml-1 inline h-3 w-3 align-middle opacity-70" /> : null}
             {mine ? (
-              <span
-                className={cn(
-                  'ml-2 text-[10px] font-semibold tracking-wide text-ui-accent dark:text-ui-accent-text'
-                )}
-              >
+              <span className="ml-2 text-[10px] font-semibold tracking-wide text-white/85">
                 {m.readBy?.[peerKey] ? 'Read' : m.deliveredBy?.[peerKey] ? 'Delivered' : 'Sent'}
               </span>
             ) : null}
@@ -445,7 +433,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
                     className={cn(
                       'mt-2 block rounded-xl border px-3 py-2 text-sm no-underline transition hover:brightness-[1.02]',
                       mine
-                        ? 'border-ui-bubble-mine-border bg-ui-bubble-mine text-slate-900 hover:brightness-[1.02] dark:text-slate-100'
+                        ? 'border-white/25 bg-white/12 text-white hover:bg-white/16'
                         : 'border-ui-bubble-other-border bg-ui-muted text-slate-800 hover:brightness-[1.02] dark:bg-ui-bubble-other dark:text-slate-100'
                     )}
                   >
@@ -453,7 +441,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
                     <div
                       className={cn(
                         'mt-0.5 text-xs opacity-80',
-                        mine ? 'text-ui-accent dark:text-ui-accent-text' : 'text-slate-500'
+                        mine ? 'text-white/80' : 'text-slate-500'
                       )}
                     >
                       Open / download
@@ -467,7 +455,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
                       m.isDeleted
                         ? 'italic opacity-80'
                         : mine
-                          ? 'text-slate-800 dark:text-slate-100'
+                          ? 'text-white'
                           : 'text-slate-800 dark:text-slate-100'
                     )}
                   >
@@ -591,6 +579,8 @@ export default function ChatDashboardPage() {
   const [pollOpt3, setPollOpt3] = useState('Option C');
   const [inboxMailbox, setInboxMailbox] = useState('open');
   const [inboxSort, setInboxSort] = useState('newest');
+  /** DIRECT | GROUPS | PUBLIC — Chat-style sidebar tabs */
+  const [sidebarInboxTab, setSidebarInboxTab] = useState('direct');
   const [detailTab, setDetailTab] = useState('overview');
   const [detailTagsOpen, setDetailTagsOpen] = useState(true);
   /** Messages | Contact — matches reference tab strip */
@@ -644,6 +634,11 @@ export default function ChatDashboardPage() {
     });
     return list;
   }, [recentChats, inboxMailbox, inboxSort]);
+
+  const suggestionPeers = useMemo(() => {
+    const id = activeUserId.trim();
+    return displayedRecentChats.filter((c) => c.peerId !== id).slice(0, 5);
+  }, [displayedRecentChats, activeUserId]);
 
   const sessionStats = useMemo(() => {
     const n = messages.length;
@@ -1288,67 +1283,68 @@ export default function ChatDashboardPage() {
   };
 
   return (
-    <ChatAppShell gridClassName="grid-cols-1 lg:grid-cols-[64px_minmax(280px,340px)_1fr] xl:grid-cols-[64px_minmax(280px,340px)_1fr_minmax(300px,380px)]">
-      <nav className="hidden min-h-0 lg:flex" aria-label="Primary">
-        <ChatAppIconRail variant="vertical" active="dm" dmUnreadCount={dmUnreadTotal} />
-      </nav>
-
+    <ChatAppShell
+      topBar={<ChatAppTopBar />}
+      gridClassName="grid-cols-1 lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)] xl:grid-cols-[minmax(300px,360px)_minmax(0,1fr)_minmax(280px,340px)]"
+    >
       <aside className="flex max-h-[42vh] min-h-0 flex-col border-b border-ui-border bg-ui-sidebar lg:max-h-none lg:border-b-0 lg:border-r">
-        <div className="shrink-0 lg:hidden">
+        <div className="shrink-0 border-b border-ui-border">
           <ChatAppIconRail active="dm" dmUnreadCount={dmUnreadTotal} />
         </div>
 
-        <div className="flex items-center gap-2 px-4 pb-1 pt-3">
-          <Link
-            href="/"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-600 transition hover:bg-ui-muted dark:text-slate-300"
-            aria-label="Back"
+        <div className="flex items-center justify-between gap-3 px-4 pb-1 pt-3">
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Chats</h1>
+          <button
+            type="button"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-ui-grad-from to-ui-grad-to text-white shadow-md shadow-violet-900/20 transition hover:brightness-110 dark:shadow-black/30"
+            aria-label="New chat"
+            onClick={() => {
+              setSearchOpen(true);
+              setTimeout(() => searchInputRef.current?.focus(), 50);
+            }}
           >
-            <ChevronLeft className="h-5 w-5" />
-          </Link>
-          <h1 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">Chat</h1>
+            <Plus className="h-5 w-5" />
+          </button>
         </div>
 
-        <div className="px-4 pb-3">
-          <div className="flex flex-col items-center rounded-2xl border border-ui-border bg-ui-muted/50 py-4 dark:bg-slate-800/30">
-            <Image
-              src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user?.username || user?.id || 'me')}`}
-              alt=""
-              width={72}
-              height={72}
-              unoptimized
-              className="h-[72px] w-[72px] rounded-full border-2 border-white bg-ui-panel object-cover shadow-md dark:border-slate-600"
-            />
-            <p className="mt-2.5 text-center text-sm font-bold text-slate-900 dark:text-white">
-              {user?.username || 'You'}
-            </p>
-            <span className="mt-2 inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
-              Available
-            </span>
-          </div>
+        <div className="flex items-center gap-4 border-b border-ui-border px-4 pb-2 pt-1">
+          {[
+            { id: 'direct', label: 'Direct' },
+            { id: 'groups', label: 'Groups' },
+            { id: 'public', label: 'Public' },
+          ].map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setSidebarInboxTab(t.id)}
+              className={cn(
+                'relative flex items-center gap-1.5 pb-2 text-[11px] font-bold uppercase tracking-wide transition',
+                sidebarInboxTab === t.id
+                  ? 'text-ui-accent'
+                  : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+              )}
+            >
+              <span
+                className={cn(
+                  'h-1.5 w-1.5 shrink-0 rounded-full',
+                  sidebarInboxTab === t.id ? 'bg-red-500' : 'bg-red-500/35'
+                )}
+                aria-hidden
+              />
+              {t.label}
+              {sidebarInboxTab === t.id ? (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-gradient-to-r from-ui-grad-from to-ui-grad-to" />
+              ) : null}
+            </button>
+          ))}
         </div>
 
             <div
               ref={searchWrapRef}
               data-sidebar-search
-              className="relative shrink-0 border-b border-ui-border px-4 pb-3"
+              className="relative shrink-0 border-b border-ui-border px-4 pb-3 pt-2"
             >
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">Last chats</h2>
-                <button
-                  type="button"
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-ui-accent text-ui-on-accent shadow-md transition hover:bg-ui-accent-hover"
-                  aria-label="New chat"
-                  onClick={() => {
-                    setSearchOpen(true);
-                    setTimeout(() => searchInputRef.current?.focus(), 50);
-                  }}
-                >
-                  <Plus className="h-5 w-5" />
-                </button>
-              </div>
-
-              <div className="mb-3 flex items-center gap-2">
+              <div className="mb-2 flex items-center gap-2">
                 <select
                   value={inboxMailbox}
                   onChange={(e) => setInboxMailbox(e.target.value)}
@@ -1365,13 +1361,6 @@ export default function ChatDashboardPage() {
                 >
                   {inboxSort === 'newest' ? 'Newest' : 'Oldest'}
                 </button>
-                <button
-                  type="button"
-                  className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-ui-accent transition hover:text-ui-accent-hover"
-                  onClick={() => router.push('/groups')}
-                >
-                  Groups
-                </button>
               </div>
 
               <div className="relative">
@@ -1379,7 +1368,7 @@ export default function ChatDashboardPage() {
                 <input
                   ref={searchInputRef}
                   className="w-full rounded-2xl border border-ui-border bg-ui-panel py-2.5 pl-10 pr-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-ui-accent focus:ring-4 focus:ring-[var(--ui-focus)] dark:text-slate-100"
-                  placeholder="Search…"
+                  placeholder="Search"
                   value={searchQuery}
                   onChange={(e) => {
                     setSearchQuery(e.target.value);
@@ -1424,112 +1413,145 @@ export default function ChatDashboardPage() {
             </div>
 
             <div className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-3 pt-1 sm:px-4">
-              {recentLoadError && (
-                <div className="rounded-xl border border-red-400/40 bg-red-500/10 px-2.5 py-2 text-xs text-red-700 dark:text-red-300">
-                  <p>{recentLoadError}</p>
+              {sidebarInboxTab === 'direct' ? (
+                <>
+                  {recentLoadError && (
+                    <div className="rounded-xl border border-red-400/40 bg-red-500/10 px-2.5 py-2 text-xs text-red-700 dark:text-red-300">
+                      <p>{recentLoadError}</p>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="mt-2 h-7 px-2 text-[11px]"
+                        onClick={() => setRecentRefreshTick((value) => value + 1)}
+                      >
+                        Retry
+                      </Button>
+                    </div>
+                  )}
+
+                  {recentLoading ? (
+                    <div className="flex items-center gap-2 px-2 py-3 text-xs text-slate-500">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Loading…
+                    </div>
+                  ) : displayedRecentChats.length === 0 ? (
+                    <p className="px-2 py-4 text-center text-xs text-slate-500">
+                      {inboxMailbox === 'archived' ? 'No archived threads.' : 'No conversations yet. Search above to start.'}
+                    </p>
+                  ) : (
+                    displayedRecentChats.map((chat) => {
+                      const selected = activeUserId.trim() === chat.peerId;
+                      const unread = Number(chat.unreadCount || 0);
+                      return (
+                        <button
+                          key={chat.threadId}
+                          type="button"
+                          onClick={() => {
+                            if (chat.locked) {
+                              setActionError('Chat is locked. Right click to unlock.');
+                              return;
+                            }
+                            pickPeer(chat.peerId, chat.peerUsername);
+                          }}
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            setRecentMenu({
+                              x: e.clientX,
+                              y: e.clientY,
+                              chat
+                            });
+                          }}
+                          className={cn(
+                            'flex w-full gap-3 rounded-2xl border border-transparent px-3 py-2.5 text-left transition',
+                            selected
+                              ? 'bg-ui-chat-active text-ui-chat-active-fg shadow-md'
+                              : 'text-slate-800 hover:border-ui-border hover:bg-ui-panel dark:text-slate-100 dark:hover:bg-ui-muted'
+                          )}
+                        >
+                          <Image
+                            src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(chat.peerUsername || chat.peerId)}`}
+                            alt=""
+                            width={44}
+                            height={44}
+                            unoptimized
+                            className={cn(
+                              'h-11 w-11 shrink-0 rounded-full border object-cover',
+                              selected ? 'border-white/35' : 'border-ui-border'
+                            )}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-2">
+                              <p
+                                className={cn(
+                                  'flex min-w-0 items-center gap-1 truncate text-sm font-semibold',
+                                  selected ? 'text-ui-chat-active-fg' : 'text-slate-800 dark:text-slate-100'
+                                )}
+                              >
+                                <span className="truncate">{chat.peerUsername}</span>
+                                {chat.locked && <Lock className="h-3.5 w-3.5 shrink-0 opacity-80" />}
+                                {chat.archived && <Archive className="h-3.5 w-3.5 shrink-0 opacity-80" />}
+                              </p>
+                              <span
+                                className={cn(
+                                  'shrink-0 text-[11px] tabular-nums',
+                                  selected ? 'text-[var(--ui-chat-active-muted)]' : 'text-slate-400 dark:text-slate-500'
+                                )}
+                              >
+                                {formatListTime(chat.lastAt)}
+                              </span>
+                            </div>
+                            <div className="mt-0.5 flex items-center justify-between gap-2">
+                              <p
+                                className={cn(
+                                  'min-w-0 flex-1 truncate text-xs',
+                                  selected ? 'text-[var(--ui-chat-active-muted)]' : 'text-slate-500 dark:text-slate-400'
+                                )}
+                              >
+                                {chat.lastMessage || 'Message'}
+                              </p>
+                              {unread > 0 ? (
+                                <span
+                                  className={cn(
+                                    'inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[10px] font-bold',
+                                    selected
+                                      ? 'bg-white/20 text-white'
+                                      : 'bg-gradient-to-r from-ui-grad-from to-ui-grad-to text-white shadow-sm'
+                                  )}
+                                >
+                                  {unread > 99 ? '99+' : unread}
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </>
+              ) : null}
+
+              {sidebarInboxTab === 'groups' ? (
+                <div className="flex flex-col items-center gap-3 px-3 py-8 text-center">
+                  <Users className="h-10 w-10 text-ui-accent opacity-90" />
+                  <p className="max-w-[220px] text-sm text-slate-600 dark:text-slate-300">
+                    Open the groups hub to browse and join group conversations.
+                  </p>
                   <Button
                     type="button"
-                    variant="secondary"
-                    size="sm"
-                    className="mt-2 h-7 px-2 text-[11px]"
-                    onClick={() => setRecentRefreshTick((value) => value + 1)}
+                    className="rounded-full bg-gradient-to-r from-ui-grad-from to-ui-grad-to px-5 text-ui-on-accent shadow-md hover:brightness-110"
+                    onClick={() => router.push('/groups')}
                   >
-                    Retry
+                    Go to groups
                   </Button>
                 </div>
-              )}
+              ) : null}
 
-              {recentLoading ? (
-                <div className="flex items-center gap-2 px-2 py-3 text-xs text-slate-500">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Loading…
+              {sidebarInboxTab === 'public' ? (
+                <div className="px-3 py-8 text-center">
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Public channels are coming soon.</p>
                 </div>
-              ) : displayedRecentChats.length === 0 ? (
-                <p className="px-2 py-4 text-center text-xs text-slate-500">
-                  {inboxMailbox === 'archived' ? 'No archived threads.' : 'No conversations yet. Search above to start.'}
-                </p>
-              ) : (
-                displayedRecentChats.map((chat) => {
-                  const selected = activeUserId.trim() === chat.peerId;
-                  const unread = Number(chat.unreadCount || 0);
-                  return (
-                    <button
-                      key={chat.threadId}
-                      type="button"
-                      onClick={() => {
-                        if (chat.locked) {
-                          setActionError('Chat is locked. Right click to unlock.');
-                          return;
-                        }
-                        pickPeer(chat.peerId, chat.peerUsername);
-                      }}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        setRecentMenu({
-                          x: e.clientX,
-                          y: e.clientY,
-                          chat
-                        });
-                      }}
-                      className={cn(
-                        'flex w-full gap-3 rounded-xl border border-transparent px-3 py-2.5 text-left transition',
-                        selected
-                          ? 'border-ui-row-border bg-ui-row shadow-sm'
-                          : 'text-slate-800 hover:border-ui-border hover:bg-ui-panel dark:text-slate-100 dark:hover:bg-ui-muted'
-                      )}
-                    >
-                      <Image
-                        src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(chat.peerUsername || chat.peerId)}`}
-                        alt=""
-                        width={44}
-                        height={44}
-                        unoptimized
-                        className={cn(
-                          'h-11 w-11 shrink-0 rounded-full border object-cover',
-                          selected ? 'border-ui-accent' : 'border-ui-border'
-                        )}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-2">
-                          <p
-                            className={cn(
-                              'flex min-w-0 items-center gap-1 truncate text-sm font-semibold',
-                              selected ? 'text-slate-900 dark:text-ui-accent-text' : 'text-slate-800 dark:text-slate-100'
-                            )}
-                          >
-                            <span className="truncate">{chat.peerUsername}</span>
-                            {chat.locked && <Lock className="h-3.5 w-3.5 shrink-0 opacity-80" />}
-                            {chat.archived && <Archive className="h-3.5 w-3.5 shrink-0 opacity-80" />}
-                          </p>
-                          <span
-                            className={cn(
-                              'shrink-0 text-[11px] tabular-nums',
-                              selected ? 'text-ui-accent dark:text-ui-accent-text' : 'text-slate-400 dark:text-slate-500'
-                            )}
-                          >
-                            {formatListTime(chat.lastAt)}
-                          </span>
-                        </div>
-                        <div className="mt-0.5 flex items-center justify-between gap-2">
-                          <p
-                            className={cn(
-                              'min-w-0 flex-1 truncate text-xs',
-                              selected ? 'text-slate-600 dark:text-slate-300' : 'text-slate-500 dark:text-slate-400'
-                            )}
-                          >
-                            {chat.lastMessage || 'Message'}
-                          </p>
-                          {!selected && unread > 0 ? (
-                            <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
-                              {unread > 99 ? '99+' : unread}
-                            </span>
-                          ) : null}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })
-              )}
+              ) : null}
             </div>
           </aside>
 
@@ -1623,23 +1645,9 @@ export default function ChatDashboardPage() {
           <section className="flex min-h-0 flex-1 flex-col overflow-hidden border-b border-ui-border bg-ui-panel lg:border-b-0">
             <div className="shrink-0 border-b border-ui-border bg-ui-panel px-4 pb-0 pt-3">
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                    {activeUserId.trim()
-                      ? peerUsername || peerShort || 'Chat'
-                      : 'Chat'}
-                  </h2>
-                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                    {activeUserId.trim()
-                      ? peerPresenceLoading
-                        ? 'Status…'
-                        : formatPeerPresence(peerPresence?.online, peerPresence?.lastSeen)
-                      : 'Select a chat from the list'}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-1.5">
+                <div className="flex min-w-0 flex-1 items-start gap-3">
                   {activeUserId.trim() ? (
-                    <div className="relative mr-1">
+                    <div className="relative shrink-0">
                       {!peerAvatarFailed ? (
                         <Image
                           src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${peerAvatarSeed}`}
@@ -1663,6 +1671,22 @@ export default function ChatDashboardPage() {
                       ) : null}
                     </div>
                   ) : null}
+                  <div className="min-w-0 flex-1">
+                    <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                      {activeUserId.trim()
+                        ? peerUsername || peerShort || 'Chat'
+                        : 'Chat'}
+                    </h2>
+                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                      {activeUserId.trim()
+                        ? peerPresenceLoading
+                          ? 'Status…'
+                          : formatPeerPresence(peerPresence?.online, peerPresence?.lastSeen)
+                        : 'Select a chat from the list'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
                   {activeUserId.trim() && user?.id ? (
                     <>
                     <button
@@ -1890,7 +1914,7 @@ export default function ChatDashboardPage() {
                       >
                         {showDate ? (
                           <p className="mb-3 text-center text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                            {formatSessionDivider(currTs)}
+                            {formatDaySeparator(currTs)}
                           </p>
                         ) : null}
                         <ChatMessageRow
@@ -2019,7 +2043,7 @@ export default function ChatDashboardPage() {
                       disabled={!activeUserId.trim()}
                       onClick={() => mediaInputRef.current?.click()}
                     >
-                      <Plus className="h-[22px] w-[22px]" />
+                      <Paperclip className="h-[22px] w-[22px]" />
                     </button>
                     <textarea
                       ref={composerInputRef}
@@ -2032,7 +2056,7 @@ export default function ChatDashboardPage() {
                         ta.style.height = 'auto';
                         ta.style.height = `${Math.min(Math.max(ta.scrollHeight, 40), 128)}px`;
                       }}
-                      placeholder={activeUserId.trim() ? 'Write your message…' : 'Select a chat'}
+                      placeholder={activeUserId.trim() ? 'Type a message here…' : 'Select a chat'}
                       disabled={!activeUserId.trim()}
                     />
                     <button
@@ -2049,7 +2073,7 @@ export default function ChatDashboardPage() {
                       <button
                         type="submit"
                         disabled={!activeUserId.trim() || sendingMessage}
-                        className="mb-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-ui-accent text-ui-on-accent shadow-md transition hover:bg-ui-accent-hover disabled:cursor-not-allowed disabled:opacity-45"
+                        className="mb-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-ui-grad-from to-ui-grad-to text-white shadow-md transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45"
                         aria-label="Send"
                       >
                         {sendingMessage ? (
@@ -2193,17 +2217,86 @@ export default function ChatDashboardPage() {
           </section>
 
           <aside className="hidden min-h-0 w-full max-w-[380px] flex-col overflow-y-auto border-l border-ui-border bg-ui-panel xl:flex">
-            <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-ui-border bg-ui-panel/95 px-3 py-3 backdrop-blur dark:bg-ui-panel/95">
-              <span
-                className="flex h-8 w-8 items-center justify-center rounded-full text-slate-500 dark:text-slate-400"
-                aria-hidden
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </span>
-              <span className="text-sm font-bold text-slate-900 dark:text-white">Shared files</span>
-            </div>
+            <div className="min-h-0 flex-1 space-y-5 p-4">
+              <section>
+                <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Notifications
+                </h3>
+                <ul className="mt-2 space-y-2">
+                  {[
+                    { user: 'Ankita', action: 'mentioned you in Design sync' },
+                    { user: 'Rahul', action: 'reacted to your message' },
+                    { user: 'Neha', action: 'shared a file with the team' },
+                  ].map((n) => (
+                    <li
+                      key={n.user + n.action}
+                      className="flex gap-2.5 rounded-2xl border border-ui-border bg-ui-muted/40 px-2.5 py-2 dark:bg-slate-800/40"
+                    >
+                      <Image
+                        src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(n.user)}`}
+                        alt=""
+                        width={36}
+                        height={36}
+                        unoptimized
+                        className="h-9 w-9 shrink-0 rounded-full border border-ui-border object-cover"
+                      />
+                      <p className="min-w-0 flex-1 text-[12px] leading-snug text-slate-700 dark:text-slate-200">
+                        <span className="font-semibold text-blue-600 dark:text-blue-400">@{n.user}</span>{' '}
+                        {n.action}.
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </section>
 
-            <div className="min-h-0 flex-1 space-y-4 p-4">
+              <section>
+                <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  People you may know
+                </h3>
+                <ul className="mt-2 space-y-2">
+                  {suggestionPeers.length === 0 ? (
+                    <li className="rounded-2xl border border-dashed border-ui-border px-3 py-4 text-center text-xs text-slate-500 dark:text-slate-400">
+                      More conversations will appear here for quick adds.
+                    </li>
+                  ) : (
+                    suggestionPeers.map((chat) => (
+                      <li
+                        key={chat.threadId}
+                        className="flex items-center gap-2.5 rounded-2xl border border-ui-border bg-ui-panel px-2 py-2"
+                      >
+                        <Image
+                          src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(chat.peerUsername || chat.peerId)}`}
+                          alt=""
+                          width={40}
+                          height={40}
+                          unoptimized
+                          className="h-10 w-10 shrink-0 rounded-full border border-ui-border object-cover"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
+                            {chat.peerUsername}
+                          </p>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400">0 mutual connections</p>
+                        </div>
+                        <button
+                          type="button"
+                          className="shrink-0 rounded-full bg-gradient-to-r from-ui-grad-from to-ui-grad-to px-3 py-1 text-[11px] font-semibold text-white shadow-sm hover:brightness-110"
+                          onClick={() => pickPeer(chat.peerId, chat.peerUsername)}
+                        >
+                          Add
+                        </button>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </section>
+
+              <div className="border-t border-ui-border pt-4">
+                <p className="mb-3 text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  This chat
+                </p>
+              </div>
+
               <div className="flex flex-col items-center text-center">
                 {activeUserId.trim() ? (
                   <>

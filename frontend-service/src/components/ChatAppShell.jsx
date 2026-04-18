@@ -3,11 +3,12 @@
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
-export function ChatAppShell({ children, gridClassName, className }) {
+export function ChatAppShell({ topBar = null, children, gridClassName, className }) {
   return (
     <div
       className={cn('flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-ui-canvas', className)}
     >
+      {topBar}
       <motion.main
         className="flex min-h-0 flex-1 flex-col overflow-hidden p-2 sm:p-4"
         initial={{ opacity: 0, y: 8 }}

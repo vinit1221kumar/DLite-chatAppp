@@ -4,80 +4,113 @@
 
 @layer base {
   /**
-   * App UI tokens — original: warm cream + logo gold (light), deep slate + gold (dark).
+   * Chat-style UI: purple gradients, #f8f9fa canvas, dark active list row.
+   * `html.brand-warm` = light yellow / gold accents (logo-friendly).
    */
   :root {
     color-scheme: light;
-    --ui-fg: #1c1917;
-    --ui-fg-muted: #57534e;
-    --ui-canvas: #ebe6dc;
+    --ui-fg: #212529;
+    --ui-fg-muted: #6c757d;
+    --ui-canvas: #f8f9fa;
     --ui-shell: #ffffff;
-    --ui-sidebar: #f3efe8;
+    --ui-sidebar: #ffffff;
     --ui-panel: #ffffff;
-    --ui-border: rgba(62, 47, 28, 0.11);
-    --ui-muted: #e8e2d8;
-    --ui-accent: #b8860b;
-    --ui-accent-hover: #9a7209;
-    --ui-on-accent: #fffef9;
-    --ui-accent-subtle: rgba(184, 134, 11, 0.14);
-    --ui-accent-text: #6b4f0c;
-    --ui-bubble-mine: #ece4d4;
-    --ui-bubble-mine-border: rgba(184, 134, 11, 0.22);
-    --ui-bubble-other: #ffffff;
-    --ui-bubble-other-border: rgba(62, 47, 28, 0.1);
-    --ui-thread-bg: #e3ddd4;
-    --ui-composer-bg: #e8e3db;
-    --ui-composer-pill: rgba(255, 255, 255, 0.94);
-    --ui-rail-bg: #2d2926;
-    --ui-rail-active: #c9a227;
-    --ui-rail-fg: #d6d3cd;
-    --ui-rail-fg-muted: #9c9890;
-    --ui-row-selected: #f0e8d4;
-    --ui-row-selected-border: rgba(184, 134, 11, 0.35);
-    --ui-link: #8b6914;
-    --ui-focus: rgba(184, 134, 11, 0.38);
-    --ui-menu-hover: color-mix(in srgb, var(--ui-accent) 12%, var(--ui-panel));
-    --ui-pinned-bg: color-mix(in srgb, var(--ui-accent) 14%, var(--ui-panel));
-    --ui-poll-bg: #5c4a32;
-    --ui-poll-bar: #d4a834;
-    --ui-poll-muted: rgba(255, 252, 245, 0.88);
+    --ui-border: rgba(52, 58, 64, 0.1);
+    --ui-muted: #f1f3f5;
+    --ui-grad-from: #8e2de2;
+    --ui-grad-to: #4a00e0;
+    --ui-bubble-mine: rgba(255, 255, 255, 0.14);
+    --ui-bubble-mine-border: rgba(255, 255, 255, 0.28);
+    --ui-accent: #7c3aed;
+    --ui-accent-hover: #6d28d9;
+    --ui-on-accent: #ffffff;
+    --ui-accent-subtle: rgba(142, 45, 226, 0.12);
+    --ui-accent-text: #5b21b6;
+    --ui-bubble-other: #e8eaef;
+    --ui-bubble-other-border: rgba(52, 58, 64, 0.09);
+    --ui-thread-bg: #f8f9fa;
+    --ui-composer-bg: #f8f9fa;
+    --ui-composer-pill: #ffffff;
+    --ui-rail-bg: #ffffff;
+    --ui-rail-active: #7c3aed;
+    --ui-rail-fg: #495057;
+    --ui-rail-fg-muted: #adb5bd;
+    --ui-chat-active-bg: #343a40;
+    --ui-chat-active-fg: #ffffff;
+    --ui-chat-active-muted: rgba(255, 255, 255, 0.72);
+    --ui-row-selected: #ede9fe;
+    --ui-row-selected-border: rgba(124, 58, 237, 0.28);
+    --ui-link: #6d28d9;
+    --ui-focus: rgba(142, 45, 226, 0.28);
+    --ui-menu-hover: #f1f3f5;
+    --ui-pinned-bg: rgba(124, 58, 237, 0.09);
+    --ui-poll-bg: #4a00e0;
+    --ui-poll-bar: #c4b5fd;
+    --ui-poll-muted: rgba(245, 243, 255, 0.92);
+ }
+
+  html.brand-warm {
+    --ui-grad-from: #e9b949;
+    --ui-grad-to: #b45309;
+    --ui-accent: #d97706;
+    --ui-accent-hover: #b45309;
+    --ui-accent-subtle: rgba(217, 119, 6, 0.14);
+    --ui-accent-text: #92400e;
+    --ui-link: #b45309;
+    --ui-focus: rgba(217, 119, 6, 0.28);
+    --ui-poll-bg: #92400e;
+    --ui-poll-bar: #fcd34d;
+    --ui-chat-active-bg: #4a3f2a;
+    --ui-row-selected: #fef3c7;
+    --ui-row-selected-border: rgba(217, 119, 6, 0.35);
   }
 
   .dark {
     color-scheme: dark;
-    --ui-fg: #f5f5f4;
-    --ui-fg-muted: #a8a29e;
-    --ui-canvas: #0c0f14;
-    --ui-shell: #141a22;
-    --ui-sidebar: #111820;
-    --ui-panel: #141a22;
-    --ui-border: rgba(148, 163, 184, 0.14);
-    --ui-muted: #1a222d;
-    --ui-accent: #e3b84a;
-    --ui-accent-hover: #f0c85c;
-    --ui-on-accent: #1a1508;
-    --ui-accent-subtle: rgba(227, 184, 74, 0.16);
-    --ui-accent-text: #f5e6bc;
-    --ui-bubble-mine: #1e2836;
-    --ui-bubble-mine-border: rgba(227, 184, 74, 0.28);
-    --ui-bubble-other: #1a2029;
-    --ui-bubble-other-border: rgba(148, 163, 184, 0.16);
-    --ui-thread-bg: #0e1218;
-    --ui-composer-bg: #111820;
-    --ui-composer-pill: #1a222d;
-    --ui-rail-bg: #0a0e13;
-    --ui-rail-active: #e3b84a;
-    --ui-rail-fg: #e7e5e4;
-    --ui-rail-fg-muted: #78716c;
-    --ui-row-selected: rgba(227, 184, 74, 0.12);
-    --ui-row-selected-border: rgba(227, 184, 74, 0.38);
-    --ui-link: #f0c85c;
-    --ui-focus: rgba(227, 184, 74, 0.32);
-    --ui-menu-hover: color-mix(in srgb, var(--ui-accent) 14%, var(--ui-panel));
-    --ui-pinned-bg: color-mix(in srgb, var(--ui-accent) 12%, var(--ui-panel));
-    --ui-poll-bg: #2a2318;
-    --ui-poll-bar: #e3b84a;
-    --ui-poll-muted: rgba(245, 240, 230, 0.85);
+    --ui-fg: #f8f9fa;
+    --ui-fg-muted: #adb5bd;
+    --ui-canvas: #121218;
+    --ui-shell: #1a1a22;
+    --ui-sidebar: #1a1a22;
+    --ui-panel: #1a1a22;
+    --ui-border: rgba(255, 255, 255, 0.08);
+    --ui-muted: #2a2a32;
+    --ui-grad-from: #a78bfa;
+    --ui-grad-to: #7c3aed;
+    --ui-bubble-mine: rgba(255, 255, 255, 0.12);
+    --ui-bubble-mine-border: rgba(255, 255, 255, 0.22);
+    --ui-accent: #a78bfa;
+    --ui-accent-hover: #c4b5fd;
+    --ui-on-accent: #1e1b4b;
+    --ui-accent-subtle: rgba(167, 139, 250, 0.15);
+    --ui-accent-text: #e9d5ff;
+    --ui-bubble-other: #2a2a32;
+    --ui-bubble-other-border: rgba(255, 255, 255, 0.08);
+    --ui-thread-bg: #121218;
+    --ui-composer-bg: #1a1a22;
+    --ui-composer-pill: #2a2a32;
+    --ui-rail-bg: #1a1a22;
+    --ui-rail-active: #a78bfa;
+    --ui-rail-fg: #e9ecef;
+    --ui-rail-fg-muted: #868e96;
+    --ui-chat-active-bg: #343a40;
+    --ui-chat-active-fg: #ffffff;
+    --ui-chat-active-muted: rgba(255, 255, 255, 0.75);
+    --ui-row-selected: rgba(124, 58, 237, 0.2);
+    --ui-row-selected-border: rgba(167, 139, 250, 0.35);
+    --ui-link: #c4b5fd;
+    --ui-focus: rgba(167, 139, 250, 0.3);
+    --ui-menu-hover: rgba(42, 42, 50, 0.95);
+    --ui-pinned-bg: rgba(124, 58, 237, 0.12);
+    --ui-poll-bg: #5b21b6;
+    --ui-poll-bar: #ddd6fe;
+    --ui-poll-muted: rgba(237, 233, 254, 0.9);
+  }
+
+  html.brand-warm.dark {
+    --ui-grad-from: #fbbf24;
+    --ui-grad-to: #d97706;
+    --ui-on-accent: #1c1917;
   }
 
   html,
@@ -111,28 +144,63 @@
 }
 
 @layer components {
+  .chat-bubble-sent {
+    border-radius: 1.25rem;
+    border-top-right-radius: 0.375rem;
+    border: none;
+    background-image: linear-gradient(90deg, var(--ui-grad-from), var(--ui-grad-to));
+    color: #fff;
+    box-shadow: 0 6px 22px -10px rgba(74, 0, 224, 0.5);
+  }
+
+  html.brand-warm .chat-bubble-sent {
+    box-shadow: 0 6px 22px -10px rgba(180, 83, 9, 0.45);
+  }
+
+  .chat-bubble-received {
+    border-radius: 1.25rem;
+    border-top-left-radius: 0.375rem;
+    border: 1px solid var(--ui-bubble-other-border);
+    background-color: var(--ui-bubble-other);
+    background-image: radial-gradient(rgba(33, 37, 41, 0.08) 1px, transparent 1px);
+    background-size: 5px 5px;
+    color: var(--ui-fg);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  }
+
+  .dark .chat-bubble-received {
+    background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  }
+
   .app-shell {
     @apply min-h-screen;
     background:
-      radial-gradient(1000px circle at 10% 0%, rgba(184, 134, 11, 0.07), transparent 55%),
-      radial-gradient(900px circle at 90% 20%, rgba(212, 168, 52, 0.05), transparent 50%),
+      radial-gradient(1000px circle at 10% 0%, rgba(142, 45, 226, 0.06), transparent 55%),
+      radial-gradient(900px circle at 90% 20%, rgba(74, 0, 224, 0.04), transparent 50%),
       var(--ui-canvas);
   }
 
   .dark .app-shell {
     background:
-      radial-gradient(1000px circle at 10% 0%, rgba(227, 184, 74, 0.08), transparent 55%),
-      radial-gradient(900px circle at 100% 30%, rgba(30, 27, 20, 0.5), transparent 50%),
+      radial-gradient(1000px circle at 10% 0%, rgba(167, 139, 250, 0.07), transparent 55%),
+      radial-gradient(900px circle at 100% 30%, rgba(30, 27, 75, 0.45), transparent 50%),
+      var(--ui-canvas);
+  }
+
+  html.brand-warm .app-shell {
+    background:
+      radial-gradient(1000px circle at 10% 0%, rgba(217, 119, 6, 0.07), transparent 55%),
+      radial-gradient(900px circle at 90% 20%, rgba(180, 83, 9, 0.05), transparent 50%),
       var(--ui-canvas);
   }
 
   .landing-dots {
-    background-image: radial-gradient(rgba(184, 134, 11, 0.07) 1px, transparent 1px);
+    background-image: radial-gradient(rgba(142, 45, 226, 0.06) 1px, transparent 1px);
     background-size: 28px 28px;
   }
 
   .dark .landing-dots {
-    background-image: radial-gradient(rgba(227, 184, 74, 0.09) 1px, transparent 1px);
+    background-image: radial-gradient(rgba(167, 139, 250, 0.08) 1px, transparent 1px);
   }
 
   .card {
@@ -171,17 +239,22 @@
   .btn-primary {
     @apply inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold transition duration-150;
     @apply disabled:cursor-not-allowed disabled:opacity-60;
-    background-color: var(--ui-accent);
-    color: var(--ui-on-accent);
-    box-shadow: 0 10px 35px -18px rgba(184, 134, 11, 0.55);
+    border: none;
+    background-image: linear-gradient(90deg, var(--ui-grad-from), var(--ui-grad-to));
+    color: #fff;
+    box-shadow: 0 10px 35px -18px rgba(74, 0, 224, 0.45);
   }
 
   .btn-primary:hover {
-    background-color: var(--ui-accent-hover);
+    filter: brightness(1.08);
+  }
+
+  html.brand-warm .btn-primary {
+    box-shadow: 0 10px 35px -18px rgba(180, 83, 9, 0.35);
   }
 
   .dark .btn-primary {
-    box-shadow: 0 10px 35px -18px rgba(227, 184, 74, 0.35);
+    box-shadow: 0 10px 35px -18px rgba(124, 58, 237, 0.35);
   }
 
   .btn-ghost {
@@ -202,7 +275,7 @@
 
   .badge {
     @apply inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium;
-    border-color: var(--ui-bubble-mine-border);
+    border-color: var(--ui-row-selected-border);
     background-color: var(--ui-accent-subtle);
     color: var(--ui-accent-text);
   }

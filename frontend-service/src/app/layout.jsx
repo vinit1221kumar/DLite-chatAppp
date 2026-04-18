@@ -19,7 +19,7 @@ export const metadata = {
   }
 };
 
-const themeScript = `(function(){try{var k='d-lite-theme';var m=localStorage.getItem(k);var dark;if(m==='light')dark=false;else if(m==='dark')dark=true;else if(m==='system')dark=window.matchMedia('(prefers-color-scheme: dark)').matches;else dark=false;var r=document.documentElement;r.classList.toggle('dark',dark);r.style.colorScheme=dark?'dark':'light';}catch(e){var r=document.documentElement;r.classList.remove('dark');r.style.colorScheme='light';}})();`;
+const themeScript = `(function(){try{var k='d-lite-theme';var m=localStorage.getItem(k);var dark;if(m==='light')dark=false;else if(m==='dark')dark=true;else if(m==='system')dark=window.matchMedia('(prefers-color-scheme: dark)').matches;else dark=false;var r=document.documentElement;r.classList.toggle('dark',dark);r.style.colorScheme=dark?'dark':'light';var b=localStorage.getItem('d-lite-brand');r.classList.toggle('brand-warm',b==='warm');}catch(e){var r=document.documentElement;r.classList.remove('dark');r.style.colorScheme='light';}})();`;
 
 export default function RootLayout({ children }) {
   return (

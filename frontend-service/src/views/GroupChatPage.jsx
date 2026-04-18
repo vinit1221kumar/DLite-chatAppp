@@ -159,11 +159,8 @@ export default function GroupChatPage() {
       }) {
         const reactionEntries = Object.entries(m.reactions || {});
         const t = formatGroupMessageTime(m.createdAt);
-        const bubble = mine
-          ? 'border-ui-bubble-mine-border bg-ui-bubble-mine text-slate-900 shadow-sm dark:text-slate-100'
-          : 'border-ui-bubble-other-border bg-ui-bubble-other text-slate-900 shadow-sm dark:text-slate-100';
-        const iconMine =
-          'text-ui-accent hover:bg-ui-accent-subtle dark:text-ui-accent-text dark:hover:bg-white/10';
+        const bubble = mine ? 'chat-bubble-sent' : 'chat-bubble-received';
+        const iconMine = 'text-white/90 hover:bg-white/15';
         const iconTheirs = 'text-slate-600 hover:bg-slate-200/80 dark:text-slate-300 dark:hover:bg-slate-700/50';
 
         return (
@@ -185,22 +182,26 @@ export default function GroupChatPage() {
               <div className={cn('min-w-0 flex-1', mine ? 'flex flex-col items-end' : '')}>
                 <div
                   className={cn(
-                    'mb-1 max-w-full text-[11px] text-slate-500 dark:text-slate-400',
-                    mine ? 'text-right' : 'text-left'
+                    'mb-1 max-w-full text-[11px]',
+                    mine ? 'text-right text-white/75' : 'text-left text-slate-500 dark:text-slate-400'
                   )}
                 >
-                  <span className="font-semibold text-slate-600 dark:text-slate-300">{senderName}</span>
-                  {t ? <span className="text-slate-400 dark:text-slate-500"> · {t}</span> : null}
+                  <span className={cn('font-semibold', mine ? 'text-white/95' : 'text-slate-600 dark:text-slate-300')}>
+                    {senderName}
+                  </span>
+                  {t ? (
+                    <span className={mine ? 'text-white/65' : 'text-slate-400 dark:text-slate-500'}> · {t}</span>
+                  ) : null}
                   {isPinned ? <Pin className="ml-1 inline h-3 w-3 align-middle opacity-70" /> : null}
                   {mine && memberCount > 1 ? (
-                    <span className="ml-2 text-[10px] font-medium text-ui-accent dark:text-ui-accent-text">
+                    <span className="ml-2 text-[10px] font-medium text-white/85">
                       {readCount > 0 ? `Read ${readCount}/${memberCount - 1}` : 'Sent'}
                     </span>
                   ) : null}
                 </div>
 
                 <div className="relative inline-block max-w-full">
-                  <div className={cn('rounded-[1.15rem] px-3.5 py-2.5 text-sm leading-relaxed', bubble, mine ? 'rounded-tr-md' : 'rounded-tl-md')}>
+                  <div className={cn('px-3.5 py-2.5 text-sm leading-relaxed', bubble)}>
                     {(mine || isGroupAdmin) && (
                       <div className="mb-1.5 flex items-start justify-end gap-1">
                         <div className="flex shrink-0 items-center gap-0.5">
@@ -228,7 +229,12 @@ export default function GroupChatPage() {
                         </div>
                       </div>
                     )}
-                    <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] pr-1">
+                    <div
+                      className={cn(
+                        'whitespace-pre-wrap break-words [overflow-wrap:anywhere] pr-1',
+                        mine && 'text-white [&_a]:text-white/90 [&_a]:underline'
+                      )}
+                    >
                       {linkifyGroupMessage(m.message)}
                     </div>
                   </div>

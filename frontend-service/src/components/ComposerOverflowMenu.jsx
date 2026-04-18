@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { LogOut, Moon, MoreVertical, Sun } from 'lucide-react';
+import { LogOut, Moon, MoreVertical, Palette, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AppLogo } from '@/components/AppLogo';
 import { useAuth } from '@/hooks/useAuth';
@@ -20,7 +20,7 @@ const menuItemClass = composerMenuItemClass;
  */
 export function ComposerOverflowMenu({ composerActions = null }) {
   const { logout } = useAuth();
-  const { mode, setMode, resolved } = useTheme();
+  const { mode, setMode, resolved, brand, setBrand } = useTheme();
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -66,6 +66,15 @@ export function ComposerOverflowMenu({ composerActions = null }) {
           <button type="button" role="menuitem" className={menuItemClass} onClick={() => toggleTheme()}>
             <ThemeIcon className="h-4 w-4 shrink-0 opacity-80" />
             {themeLabel}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className={menuItemClass}
+            onClick={() => setBrand(brand === 'warm' ? 'violet' : 'warm')}
+          >
+            <Palette className="h-4 w-4 shrink-0 opacity-80" />
+            {brand === 'warm' ? 'Violet brand' : 'Warm gold brand'}
           </button>
           <Link
             href="/"
