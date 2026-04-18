@@ -45,7 +45,7 @@ export function ComposerOverflowMenu() {
         type="button"
         variant="ghost"
         size="icon"
-        className="h-9 w-9 rounded-lg text-white hover:bg-white/15"
+        className="h-10 w-10 shrink-0 rounded-full text-slate-600 hover:bg-slate-200/90 dark:text-slate-300 dark:hover:bg-slate-700/80"
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label="More"

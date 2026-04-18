@@ -39,7 +39,6 @@ import {
   BarChart2,
   ChevronDown,
   ChevronUp,
-  FileText,
   Globe,
   Loader2,
   Lock,
@@ -56,9 +55,7 @@ import {
   Phone,
   Plus,
   PlusCircle,
-  Sparkles,
   Tag,
-  Type,
   Upload,
   User,
   Pin,
@@ -592,7 +589,6 @@ export default function ChatDashboardPage() {
   const [inboxMailbox, setInboxMailbox] = useState('open');
   const [inboxSort, setInboxSort] = useState('newest');
   const [detailTab, setDetailTab] = useState('overview');
-  const [composerToolsOpen, setComposerToolsOpen] = useState(true);
   const [detailTagsOpen, setDetailTagsOpen] = useState(true);
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef(null);
@@ -932,6 +928,12 @@ export default function ChatDashboardPage() {
     // FIX: Scroll to latest message on send/receive when user is near bottom.
     el.scrollTop = el.scrollHeight;
   }, [messages.length]);
+
+  useLayoutEffect(() => {
+    const ta = composerInputRef.current;
+    if (!ta || input) return;
+    ta.style.height = '40px';
+  }, [input]);
 
   const sendMessage = async (e) => {
     e.preventDefault();
@@ -1914,7 +1916,7 @@ export default function ChatDashboardPage() {
             )}
 
             <form
-              className="shrink-0 border-t border-slate-200/80 bg-[#f4f6f9] p-3 dark:border-slate-800 dark:bg-slate-900 sm:p-4"
+              className="shrink-0 border-t border-slate-200/80 bg-[#f0f2f5] px-2 py-2 dark:border-slate-800 dark:bg-slate-900 sm:px-3"
               onSubmit={sendMessage}
             >
               <input
@@ -1931,177 +1933,115 @@ export default function ChatDashboardPage() {
                 className="hidden"
                 onChange={handleSelectMedia}
               />
-              <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-950">
-                {composerToolsOpen ? (
-                  <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 dark:border-slate-800">
-                    <div className="flex min-w-0 flex-1 items-center gap-2">
-                      {activeUserId.trim() ? (
-                        <Image
-                          src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${peerAvatarSeed}`}
-                          alt=""
-                          width={28}
-                          height={28}
-                          unoptimized
-                          className="h-7 w-7 shrink-0 rounded-full border border-slate-200/80 object-cover dark:border-slate-600"
-                        />
-                      ) : (
-                        <div className="h-7 w-7 shrink-0 rounded-full bg-slate-200 dark:bg-slate-700" />
-                      )}
-                      <span className="truncate text-xs font-semibold text-slate-800 dark:text-slate-100">
-                        Chat with {peerUsername || '…'}
-                      </span>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-0.5">
-                      <button
-                        type="button"
-                        className="flex h-8 w-8 cursor-not-allowed items-center justify-center rounded-lg text-slate-400 opacity-50 dark:text-slate-500"
-                        title="Assistant — coming soon"
-                        disabled
-                      >
-                        <Sparkles className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-sky-700 dark:text-slate-400 dark:hover:bg-slate-800"
-                        title="Attach file"
-                        disabled={!activeUserId.trim() || isRecording}
-                        onClick={() => mediaInputRef.current?.click()}
-                      >
-                        <FileText className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-                        title="Collapse toolbar"
-                        onClick={() => setComposerToolsOpen(false)}
-                      >
-                        <ChevronUp className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                ) : (
+              {isRecording ? (
+                <div className="mx-auto flex max-w-4xl items-center justify-between gap-3 rounded-3xl border border-red-200/80 bg-red-50/95 px-4 py-3 dark:border-red-900/40 dark:bg-red-950/35">
+                  <span className="text-sm font-medium text-red-800 dark:text-red-200">Recording…</span>
                   <button
                     type="button"
-                    className="flex w-full items-center justify-center border-b border-slate-100 py-1.5 text-slate-400 transition hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/80"
-                    onClick={() => setComposerToolsOpen(true)}
-                    aria-label="Expand composer tools"
+                    onClick={handleStopRecording}
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-500 text-white shadow-md transition hover:bg-red-600"
+                    aria-label="Stop recording"
                   >
-                    <ChevronDown className="h-4 w-4" />
+                    <MicOff className="h-5 w-5" />
                   </button>
-                )}
-                <textarea
-                  ref={composerInputRef}
-                  rows={2}
-                  className="max-h-40 min-h-[52px] w-full resize-y border-0 bg-transparent px-4 py-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100"
-                  value={input}
-                  onChange={handleTypingInput}
-                  placeholder={
-                    activeUserId.trim() ? 'Type a message…' : 'Choose someone to chat…'
-                  }
-                  disabled={isRecording}
-                />
-                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-2 py-2 dark:border-slate-800">
-                  <div className="flex flex-wrap items-center gap-0.5">
+                </div>
+              ) : (
+                <div className="mx-auto flex max-w-4xl items-end gap-1">
+                  <div className="flex min-h-[48px] min-w-0 flex-1 items-end gap-0.5 rounded-[1.35rem] border border-slate-200/90 bg-slate-100/95 px-1 py-1 shadow-sm dark:border-slate-600 dark:bg-slate-800/95">
                     <button
                       type="button"
-                      className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-sky-700 dark:text-slate-400 dark:hover:bg-slate-800"
-                      title="Formatting"
-                      aria-label="Focus message field"
-                      disabled={!activeUserId.trim() || isRecording}
-                      onClick={() => composerInputRef.current?.focus()}
-                    >
-                      <Type className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-sky-700 dark:text-slate-400 dark:hover:bg-slate-800"
-                      title="Emoji"
-                      aria-label="Emoji"
-                      onClick={() => activeUserId.trim() && composerInputRef.current?.focus()}
-                    >
-                      <SmilePlus className="h-4 w-4" />
-                    </button>
-                    {isRecording ? (
-                      <button
-                        type="button"
-                        className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-500 text-white"
-                        onClick={handleStopRecording}
-                        aria-label="Stop recording"
-                      >
-                        <MicOff className="h-4 w-4" />
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-sky-700 dark:text-slate-400 dark:hover:bg-slate-800"
-                        aria-label="Voice note"
-                        onClick={handleStartRecording}
-                      >
-                        <Mic className="h-4 w-4" />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-sky-700 dark:text-slate-400 dark:hover:bg-slate-800"
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-200/90 disabled:opacity-40 dark:text-slate-300 dark:hover:bg-slate-700/80"
+                      title="Attach file"
                       aria-label="Attach file"
-                      disabled={!activeUserId.trim() || isRecording}
+                      disabled={!activeUserId.trim()}
                       onClick={() => mediaInputRef.current?.click()}
                     >
-                      <Paperclip className="h-4 w-4" />
+                      <Paperclip className="h-[22px] w-[22px]" />
                     </button>
                     <button
                       type="button"
-                      className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-sky-700 dark:text-slate-400 dark:hover:bg-slate-800"
-                      title="Insert @"
-                      aria-label="Insert at mention"
-                      disabled={!activeUserId.trim() || isRecording}
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-200/90 disabled:opacity-40 dark:text-slate-300 dark:hover:bg-slate-700/80"
+                      aria-label="Attach image"
+                      disabled={!activeUserId.trim()}
+                      onClick={() => mediaImageInputRef.current?.click()}
+                    >
+                      <ImageIcon className="h-[22px] w-[22px]" />
+                    </button>
+                    <button
+                      type="button"
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-200/90 disabled:opacity-40 dark:text-slate-300 dark:hover:bg-slate-700/80"
+                      title="Mention"
+                      aria-label="Insert mention"
+                      disabled={!activeUserId.trim()}
                       onClick={() => {
                         composerInputRef.current?.focus();
                         setInput((prev) => `${prev}@`);
                       }}
                     >
-                      <AtSign className="h-4 w-4" />
+                      <AtSign className="h-[22px] w-[22px]" />
                     </button>
                     <button
                       type="button"
-                      className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-sky-700 dark:text-slate-400 dark:hover:bg-slate-800"
-                      aria-label="Attach image"
-                      disabled={!activeUserId.trim() || isRecording}
-                      onClick={() => mediaImageInputRef.current?.click()}
-                    >
-                      <ImageIcon className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-sky-700 dark:text-slate-400 dark:hover:bg-slate-800"
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-200/90 disabled:opacity-40 dark:text-slate-300 dark:hover:bg-slate-700/80"
                       title="Poll"
-                      aria-label="Send a poll"
-                      disabled={!activeUserId.trim() || isRecording || sendingMessage}
+                      aria-label="Poll"
+                      disabled={!activeUserId.trim() || sendingMessage}
                       onClick={() => setPollModalOpen(true)}
                     >
-                      <BarChart2 className="h-4 w-4" />
+                      <BarChart2 className="h-[20px] w-[20px]" />
                     </button>
-                  </div>
-                  <div className="flex items-center gap-0.5 rounded-xl bg-[#2563eb] py-1 pl-3 pr-1 text-white shadow-md shadow-blue-600/25">
+                    <textarea
+                      ref={composerInputRef}
+                      rows={1}
+                      className="mb-0.5 min-h-[40px] max-h-32 min-w-0 flex-1 resize-none bg-transparent px-1 py-2.5 text-[15px] leading-5 text-slate-900 outline-none placeholder:text-slate-500 dark:text-slate-100 dark:placeholder:text-slate-500"
+                      value={input}
+                      onChange={(e) => {
+                        handleTypingInput(e);
+                        const ta = e.target;
+                        ta.style.height = 'auto';
+                        ta.style.height = `${Math.min(Math.max(ta.scrollHeight, 40), 128)}px`;
+                      }}
+                      placeholder={activeUserId.trim() ? 'Message' : 'Select a chat'}
+                      disabled={!activeUserId.trim()}
+                    />
                     <button
-                      type="submit"
-                      disabled={!activeUserId.trim() || !input.trim() || sendingMessage || isRecording}
-                      className="flex items-center gap-2 py-2 pr-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-45"
+                      type="button"
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-200/90 disabled:opacity-40 dark:text-slate-300 dark:hover:bg-slate-700/80"
+                      title="Emoji"
+                      aria-label="Emoji"
+                      disabled={!activeUserId.trim()}
+                      onClick={() => composerInputRef.current?.focus()}
                     >
-                      {sendingMessage ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <>
-                          Send
-                          <Send className="h-4 w-4" />
-                        </>
-                      )}
+                      <SmilePlus className="h-[22px] w-[22px]" />
                     </button>
-                    <span className="h-6 w-px shrink-0 bg-white/35" aria-hidden />
-                    <ComposerOverflowMenu />
+                    {input.trim() ? (
+                      <button
+                        type="submit"
+                        disabled={!activeUserId.trim() || sendingMessage}
+                        className="mb-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-sky-500 text-white shadow-md transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-45"
+                        aria-label="Send"
+                      >
+                        {sendingMessage ? (
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                        ) : (
+                          <Send className="h-5 w-5" />
+                        )}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="mb-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-200/90 dark:text-slate-300 dark:hover:bg-slate-700/80"
+                        aria-label="Voice message"
+                        disabled={!activeUserId.trim()}
+                        onClick={handleStartRecording}
+                      >
+                        <Mic className="h-5 w-5" />
+                      </button>
+                    )}
                   </div>
+                  <ComposerOverflowMenu />
                 </div>
-              </div>
+              )}
             </form>
 
             {pollModalOpen ? (
