@@ -20,6 +20,7 @@ const menuItemClass =
  * @param {{ href: string, label: string, icon: import('lucide-react').LucideIcon }[]} [props.menuLinks=[]]
  * @param {boolean} [props.showLogout=true]
  * @param {boolean} [props.collapseActionsInMenu=false]
+ * @param {boolean} [props.showChatsInCollapsedMenu=true] — Chats row in the overflow menu when collapsed (set false if rail shows Chats)
  * @param {number} [props.chatsUnreadCount=0] — badge on Chats row when collapseActionsInMenu
  */
 export function AppHeaderMenu({
@@ -27,6 +28,7 @@ export function AppHeaderMenu({
   menuLinks = [],
   showLogout = true,
   collapseActionsInMenu = false,
+  showChatsInCollapsedMenu = true,
   chatsUnreadCount = 0,
 }) {
   const { logout } = useAuth();
@@ -99,20 +101,22 @@ export function AppHeaderMenu({
             >
               {collapseActionsInMenu && (
                 <>
-                  <Link
-                    href="/dashboard"
-                    role="menuitem"
-                    className={menuItemClass}
-                    onClick={() => setMenuOpen(false)}
-                  >
-                    <MessageCircle className="h-4 w-4 shrink-0 opacity-80" />
-                    <span className="min-w-0 flex-1">Chats</span>
-                    {chatsUnreadCount > 0 ? (
-                      <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white">
-                        {chatsUnreadCount > 99 ? '99+' : chatsUnreadCount}
-                      </span>
-                    ) : null}
-                  </Link>
+                  {showChatsInCollapsedMenu ? (
+                    <Link
+                      href="/dashboard"
+                      role="menuitem"
+                      className={menuItemClass}
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      <MessageCircle className="h-4 w-4 shrink-0 opacity-80" />
+                      <span className="min-w-0 flex-1">Chats</span>
+                      {chatsUnreadCount > 0 ? (
+                        <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white">
+                          {chatsUnreadCount > 99 ? '99+' : chatsUnreadCount}
+                        </span>
+                      ) : null}
+                    </Link>
+                  ) : null}
                   <button
                     type="button"
                     role="menuitem"
