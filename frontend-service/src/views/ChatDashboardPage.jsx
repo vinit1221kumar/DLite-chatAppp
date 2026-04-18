@@ -1,7 +1,8 @@
 'use client';
 /* eslint-disable @next/next/no-img-element */
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import Link from 'next/link';
 import Image from 'next/image';
 import { formatPeerPresence } from '@/lib/formatPresence';
@@ -83,12 +84,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
 }) {
   const reactionEntries = Object.entries(m.reactions || {});
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2 }}
-      className={cn('group flex w-full flex-col', mine ? 'items-end' : 'items-start')}
-    >
+    <div className={cn('group flex w-full flex-col', mine ? 'items-end' : 'items-start')}>
       <div className="relative flex items-end">
         <div
           className={cn(
@@ -331,7 +327,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
           })}
         </div>
       )}
-    </motion.div>
+    </div>
   );
 });
 
@@ -386,11 +382,20 @@ export default function ChatDashboardPage() {
   }, [peerKey]);
   const peerLabel = useMemo(() => (peerKey ? peerUsername || peerShort : 'Peer'), [peerKey, peerUsername, peerShort]);
   const msgSearchLower = useMemo(() => msgSearch.trim().toLowerCase(), [msgSearch]);
+  const deferredMsgSearchLower = useDeferredValue(msgSearchLower);
   const filteredMessages = useMemo(() => {
-    if (!msgSearchLower) return messages;
-    return messages.filter((m) => (m.content || '').toLowerCase().includes(msgSearchLower));
-  }, [messages, msgSearchLower]);
+    if (!deferredMsgSearchLower) return messages;
+    return messages.filter((m) => (m.content || '').toLowerCase().includes(deferredMsgSearchLower));
+  }, [messages, deferredMsgSearchLower]);
   const pinnedSet = useMemo(() => new Set(pinnedMessages.map((p) => p.messageId)), [pinnedMessages]);
+
+  const messageVirtualizer = useVirtualizer({
+    count: filteredMessages.length,
+    getScrollElement: () => messagesWrapRef.current,
+    estimateSize: () => 88,
+    overscan: 12,
+    getItemKey: (index) => filteredMessages[index]?._id ?? `dm-row-${index}`,
+  });
 
   const toggleMessageMenu = useCallback((messageId) => {
     setOpenMessageMenuId((prev) => (prev === messageId ? null : messageId));
@@ -647,7 +652,7 @@ export default function ChatDashboardPage() {
     };
   }, [user?.id, activeUserId, historyRefreshTick]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!shouldAutoScrollRef.current) return;
     const el = messagesWrapRef.current;
     if (!el) return;
@@ -1421,38 +1426,54 @@ export default function ChatDashboardPage() {
                 </div>
               )}
 
-              {filteredMessages.map((m, idx) => {
-                const mine = m.senderId === user?.id;
-                const createdAt = Number(m.createdAt || 0);
-                const canEditDelete = !m.isDeleted && createdAt && Date.now() - createdAt <= EDIT_WINDOW_MS;
-                const senderLabel = mine ? user?.username || 'You' : peerLabel;
-                const isPinned = pinnedSet.has(m._id);
-                return (
-                  <ChatMessageRow
-                    key={m._id || idx}
-                    m={m}
-                    idx={idx}
-                    mine={mine}
-                    senderLabel={senderLabel}
-                    canEditDelete={canEditDelete}
-                    isPinned={isPinned}
-                    peerKey={peerKey}
-                    userId={user?.id}
-                    openMessageMenuId={openMessageMenuId}
-                    deletingMessageId={deletingMessageId}
-                    toggleMessageMenu={toggleMessageMenu}
-                    handleEditMessage={handleEditMessage}
-                    handleDeleteMessage={handleDeleteMessage}
-                    handleDeleteForMe={handleDeleteForMe}
-                    handlePinDmMessage={handlePinDmMessage}
-                    handleUnpinDmMessage={handleUnpinDmMessage}
-                    openReactionPickerId={openReactionPickerId}
-                    setOpenReactionPickerId={setOpenReactionPickerId}
-                    EMOJI_OPTIONS={EMOJI_OPTIONS}
-                    handleToggleDmReaction={handleToggleDmReaction}
-                  />
-                );
-              })}
+              {filteredMessages.length > 0 && (
+                <div
+                  className="relative w-full"
+                  style={{ height: `${messageVirtualizer.getTotalSize()}px` }}
+                >
+                  {messageVirtualizer.getVirtualItems().map((virtualRow) => {
+                    const m = filteredMessages[virtualRow.index];
+                    const idx = virtualRow.index;
+                    const mine = m.senderId === user?.id;
+                    const createdAt = Number(m.createdAt || 0);
+                    const canEditDelete = !m.isDeleted && createdAt && Date.now() - createdAt <= EDIT_WINDOW_MS;
+                    const senderLabel = mine ? user?.username || 'You' : peerLabel;
+                    const isPinned = pinnedSet.has(m._id);
+                    return (
+                      <div
+                        key={virtualRow.key}
+                        data-index={virtualRow.index}
+                        ref={messageVirtualizer.measureElement}
+                        className="absolute left-0 top-0 w-full pb-3"
+                        style={{ transform: `translateY(${virtualRow.start}px)` }}
+                      >
+                        <ChatMessageRow
+                          m={m}
+                          idx={idx}
+                          mine={mine}
+                          senderLabel={senderLabel}
+                          canEditDelete={canEditDelete}
+                          isPinned={isPinned}
+                          peerKey={peerKey}
+                          userId={user?.id}
+                          openMessageMenuId={openMessageMenuId}
+                          deletingMessageId={deletingMessageId}
+                          toggleMessageMenu={toggleMessageMenu}
+                          handleEditMessage={handleEditMessage}
+                          handleDeleteMessage={handleDeleteMessage}
+                          handleDeleteForMe={handleDeleteForMe}
+                          handlePinDmMessage={handlePinDmMessage}
+                          handleUnpinDmMessage={handleUnpinDmMessage}
+                          openReactionPickerId={openReactionPickerId}
+                          setOpenReactionPickerId={setOpenReactionPickerId}
+                          EMOJI_OPTIONS={EMOJI_OPTIONS}
+                          handleToggleDmReaction={handleToggleDmReaction}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
               {messages.length === 0 && (
                 <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-12 text-center">

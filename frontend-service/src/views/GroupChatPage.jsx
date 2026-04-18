@@ -1,6 +1,7 @@
 'use client';
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { useAuth } from '../hooks/useAuth';
 import {
   addGroupMemberByUsername,
@@ -79,11 +80,32 @@ export default function GroupChatPage() {
   const shouldAutoScrollRef = useRef(true);
 
   const groupMsgSearchLower = useMemo(() => groupMsgSearch.trim().toLowerCase(), [groupMsgSearch]);
+  const deferredGroupMsgSearchLower = useDeferredValue(groupMsgSearchLower);
   const filteredMessages = useMemo(() => {
-    if (!groupMsgSearchLower) return messages;
-    return messages.filter((m) => (m.message || '').toLowerCase().includes(groupMsgSearchLower));
-  }, [messages, groupMsgSearchLower]);
+    if (!deferredGroupMsgSearchLower) return messages;
+    return messages.filter((m) => (m.message || '').toLowerCase().includes(deferredGroupMsgSearchLower));
+  }, [messages, deferredGroupMsgSearchLower]);
   const pinnedSet = useMemo(() => new Set(groupPinnedMessages.map((p) => p.messageId)), [groupPinnedMessages]);
+
+  const isMember = !!user?.id && groupMembers.some((member) => member.id === user.id);
+  const myRole = groupMembers.find((m) => m.id === user?.id)?.role || 'member';
+  const isGroupAdmin = myRole === 'admin';
+  const senderNamesById = groupMembers.reduce((acc, member) => {
+    acc[member.id] = member.username || member.id;
+    return acc;
+  }, {});
+
+  if (user?.id) {
+    senderNamesById[user.id] = user.username || senderNamesById[user.id] || user.id;
+  }
+
+  const groupMessageVirtualizer = useVirtualizer({
+    count: filteredMessages.length,
+    getScrollElement: () => messagesWrapRef.current,
+    estimateSize: () => 80,
+    overscan: 12,
+    getItemKey: (index) => filteredMessages[index]?._id ?? `grp-row-${index}`,
+  });
 
   const MessageRow = useMemo(
     () =>
@@ -98,13 +120,7 @@ export default function GroupChatPage() {
       }) {
         const reactionEntries = Object.entries(m.reactions || {});
         return (
-          <motion.div
-            key={m._id || idx}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2 }}
-            className={cn('group flex w-full flex-col', mine ? 'items-end' : 'items-start')}
-          >
+          <div className={cn('group flex w-full flex-col', mine ? 'items-end' : 'items-start')}>
             <div className="relative flex items-end">
               <div
                 className={cn(
@@ -231,7 +247,7 @@ export default function GroupChatPage() {
                 })}
               </div>
             )}
-          </motion.div>
+          </div>
         );
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -251,18 +267,6 @@ export default function GroupChatPage() {
     onScroll();
     return () => el.removeEventListener('scroll', onScroll);
   }, []);
-
-  const isMember = !!user?.id && groupMembers.some((member) => member.id === user.id);
-  const myRole = groupMembers.find((m) => m.id === user?.id)?.role || 'member';
-  const isGroupAdmin = myRole === 'admin';
-  const senderNamesById = groupMembers.reduce((acc, member) => {
-    acc[member.id] = member.username || member.id;
-    return acc;
-  }, {});
-
-  if (user?.id) {
-    senderNamesById[user.id] = user.username || senderNamesById[user.id] || user.id;
-  }
 
   const getMemberLabel = useCallback((member) => {
     if (member.id === user?.id) {
@@ -393,7 +397,7 @@ export default function GroupChatPage() {
     };
   }, [groupId, user?.id, messagesRefreshTick]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!shouldAutoScrollRef.current) return;
     const el = messagesWrapRef.current;
     if (!el) return;
@@ -1091,27 +1095,43 @@ export default function GroupChatPage() {
               </div>
             )}
 
-            {filteredMessages.map((m, idx) => {
-              const mine = m.senderId === user?.id;
-              const senderName =
-                mine ? user?.username || 'You' : senderNamesById[m.senderId] || 'Group member';
-              const isPinned = pinnedSet.has(m._id);
-              const readCount = mine ? Object.keys(m.readBy || {}).filter((uid) => uid !== user?.id).length : 0;
-              const memberCount = groupMembers.length;
+            {filteredMessages.length > 0 && (
+              <div
+                className="relative w-full"
+                style={{ height: `${groupMessageVirtualizer.getTotalSize()}px` }}
+              >
+                {groupMessageVirtualizer.getVirtualItems().map((virtualRow) => {
+                  const m = filteredMessages[virtualRow.index];
+                  const idx = virtualRow.index;
+                  const mine = m.senderId === user?.id;
+                  const senderName =
+                    mine ? user?.username || 'You' : senderNamesById[m.senderId] || 'Group member';
+                  const isPinned = pinnedSet.has(m._id);
+                  const readCount = mine ? Object.keys(m.readBy || {}).filter((uid) => uid !== user?.id).length : 0;
+                  const memberCount = groupMembers.length;
 
-              return (
-                <MessageRow
-                  key={m._id || idx}
-                  m={m}
-                  idx={idx}
-                  mine={mine}
-                  senderName={senderName}
-                  isPinned={isPinned}
-                  readCount={readCount}
-                  memberCount={memberCount}
-                />
-              );
-            })}
+                  return (
+                    <div
+                      key={virtualRow.key}
+                      data-index={virtualRow.index}
+                      ref={groupMessageVirtualizer.measureElement}
+                      className="absolute left-0 top-0 w-full pb-2"
+                      style={{ transform: `translateY(${virtualRow.start}px)` }}
+                    >
+                      <MessageRow
+                        m={m}
+                        idx={idx}
+                        mine={mine}
+                        senderName={senderName}
+                        isPinned={isPinned}
+                        readCount={readCount}
+                        memberCount={memberCount}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             {messages.length === 0 && (
               <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
                 No messages yet. Set a groupId and send a message.

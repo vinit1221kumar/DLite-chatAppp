@@ -1,13 +1,18 @@
-import { Suspense } from 'react';
+import dynamic from 'next/dynamic';
 import { PrivateRoute } from '@/components/PrivateRoute';
-import CallScreenPage from '@/views/CallScreenPage';
+
+const CallScreenPage = dynamic(() => import('@/views/CallScreenPage'), {
+  loading: () => (
+    <div className="flex min-h-[40vh] items-center justify-center p-8 text-center text-sm text-slate-600 dark:text-slate-400">
+      Loading call…
+    </div>
+  ),
+});
 
 export default function Call() {
   return (
     <PrivateRoute>
-      <Suspense fallback={<div className="p-8 text-center text-slate-600">Loading…</div>}>
-        <CallScreenPage />
-      </Suspense>
+      <CallScreenPage />
     </PrivateRoute>
   );
 }
