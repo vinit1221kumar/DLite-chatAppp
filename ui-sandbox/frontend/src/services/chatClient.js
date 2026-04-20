@@ -683,6 +683,24 @@ export function subscribeRecentDirectChats(_userId, callback) {
   const INTERVAL_MS = 8000
   const INTERVAL_BACKGROUND_MS = 45000
 
+  function dedupeRecentChats(items) {
+    const rows = Array.isArray(items) ? items : []
+    const byKey = new Map()
+    for (const chat of rows) {
+      const key = String(chat?.threadId || chat?.chatId || chat?.peerId || chat?.id || '').trim()
+      if (!key) continue
+      const prev = byKey.get(key)
+      if (!prev) {
+        byKey.set(key, chat)
+        continue
+      }
+      const ta = new Date(chat?.lastAt || chat?.updatedAt || 0).getTime()
+      const tb = new Date(prev?.lastAt || prev?.updatedAt || 0).getTime()
+      byKey.set(key, ta >= tb ? chat : prev)
+    }
+    return [...byKey.values()]
+  }
+
   const load = async () => {
     const snapshot = await getCurrentAuthSnapshot().catch(() => null)
     if (!snapshot?.token) return cb([])
@@ -690,7 +708,7 @@ export function subscribeRecentDirectChats(_userId, callback) {
     const json = await res.json().catch(() => ({}))
     if (disposed) return
     if (!res.ok || json?.success === false) return cb([])
-    cb(json?.chats || [])
+    cb(dedupeRecentChats(json?.chats || []))
   }
 
   const schedule = () => {
