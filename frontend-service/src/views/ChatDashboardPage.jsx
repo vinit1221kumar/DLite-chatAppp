@@ -947,12 +947,21 @@ export default function ChatDashboardPage() {
     }
 
     const peerId = activeUserId.trim();
+    const threadIdForPeer = String(
+      recentChats.find((c) => String(c?.peerId || '').trim() === peerId)?.threadId || ''
+    ).trim();
     // FIX: Mark messages as read when opening a chat (DB read receipts).
     markDirectThreadRead({ userId: user.id, peerId }).catch(() => undefined);
-    markRecentDirectChatRead({ peerId })
+    markRecentDirectChatRead(threadIdForPeer ? { threadId: threadIdForPeer } : { peerId })
       .then(() => {
         // Keep UI consistent: unread badge should disappear immediately.
-        setRecentChats((prev) => prev.map((chat) => (chat.peerId === peerId ? { ...chat, unreadCount: 0 } : chat)));
+        if (threadIdForPeer) {
+          setRecentChats((prev) =>
+            prev.map((chat) => (String(chat.threadId || '').trim() === threadIdForPeer ? { ...chat, unreadCount: 0 } : chat))
+          );
+        } else {
+          setRecentChats((prev) => prev.map((chat) => (chat.peerId === peerId ? { ...chat, unreadCount: 0 } : chat)));
+        }
       })
       .catch(() => undefined);
     setMessagesLoading(true);
@@ -986,11 +995,23 @@ export default function ChatDashboardPage() {
           if (msg.senderId && msg.senderId !== user.id) {
             // FIX: If chat is open, mark as read immediately on receive.
             markDirectThreadRead({ userId: user.id, peerId }).catch(() => undefined);
-            markRecentDirectChatRead({ peerId: activeUserId.trim() })
+            const activePeerId = activeUserId.trim();
+            const activeThreadId = String(
+              recentChats.find((c) => String(c?.peerId || '').trim() === activePeerId)?.threadId || ''
+            ).trim();
+            markRecentDirectChatRead(activeThreadId ? { threadId: activeThreadId } : { peerId: activePeerId })
               .then(() => {
-                setRecentChats((prev) =>
-                  prev.map((chat) => (chat.peerId === activeUserId.trim() ? { ...chat, unreadCount: 0 } : chat))
-                );
+                if (activeThreadId) {
+                  setRecentChats((prev) =>
+                    prev.map((chat) =>
+                      String(chat.threadId || '').trim() === activeThreadId ? { ...chat, unreadCount: 0 } : chat
+                    )
+                  );
+                } else {
+                  setRecentChats((prev) =>
+                    prev.map((chat) => (chat.peerId === activePeerId ? { ...chat, unreadCount: 0 } : chat))
+                  );
+                }
               })
               .catch(() => undefined);
           }
@@ -1007,7 +1028,7 @@ export default function ChatDashboardPage() {
       cancelled = true;
       unsubscribe();
     };
-  }, [user?.id, activeUserId, historyRefreshTick]);
+  }, [user?.id, activeUserId, historyRefreshTick, recentChats]);
 
   useLayoutEffect(() => {
     if (!shouldAutoScrollRef.current) return;

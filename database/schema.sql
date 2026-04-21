@@ -1,6 +1,10 @@
 -- ============================================================================
 -- D-Lite (Supabase) canonical schema + RLS
 -- ============================================================================
+-- ===== OLD SCHEMA (baseline) =====
+-- The original schema included core chat tables (users/chats/group_members/messages/...).
+-- ===== NEW SCHEMA (additions) =====
+-- New tables are appended below with a "NEW SCHEMA" header.
 -- Assumptions:
 -- - Authentication is handled by Supabase Auth (`auth.users`)
 -- - `public.users` is a profile table keyed by `auth.users.id`
@@ -97,6 +101,18 @@ create table if not exists public.chat_settings (
 );
 
 -- =========================================
+-- HIDDEN MESSAGES (per user per message)
+-- NEW SCHEMA: required for "delete for me"
+-- =========================================
+create table if not exists public.hidden_messages (
+  user_id uuid not null references public.users(id) on delete cascade,
+  chat_id uuid not null references public.chats(id) on delete cascade,
+  message_id uuid not null references public.messages(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (user_id, chat_id, message_id)
+);
+
+-- =========================================
 -- MESSAGE READS
 -- =========================================
 create table if not exists public.message_reads (
@@ -143,6 +159,7 @@ create index if not exists idx_reactions_message_id on public.message_reactions(
 create index if not exists idx_pins_chat_id on public.pinned_messages(chat_id);
 create index if not exists idx_chat_settings_user_id on public.chat_settings(user_id);
 create index if not exists idx_chat_settings_chat_id on public.chat_settings(chat_id);
+create index if not exists idx_hidden_messages_user_chat on public.hidden_messages(user_id, chat_id);
 
 create index if not exists idx_reads_user_id on public.message_reads(user_id);
 create index if not exists idx_reads_read_at on public.message_reads(read_at desc);
@@ -194,6 +211,7 @@ alter table public.messages enable row level security;
 alter table public.message_reads enable row level security;
 alter table public.typing_status enable row level security;
 alter table public.presence enable row level security;
+alter table public.hidden_messages enable row level security;
 
 -- =========================================
 -- COLUMN PRIVILEGES (avoid leaking email)

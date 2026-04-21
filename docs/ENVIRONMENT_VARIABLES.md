@@ -19,6 +19,16 @@ This project is configured to use **Supabase Auth** (no local-auth fallback).
 ### Recommended
 - **`SUPABASE_SERVICE_ROLE_KEY`**: required for `POST /chat/groups/ensure` (server-side writes)
 
+### Chat media (Cloudinary, server-only)
+
+Required for `POST /chat/media/upload` (DM/group image and file uploads):
+
+- **`CLOUDINARY_CLOUD_NAME`**: cloud name from the Cloudinary dashboard
+- **`CLOUDINARY_API_KEY`**: API key
+- **`CLOUDINARY_API_SECRET`**: API secret (never expose to the browser; keep on `core-backend` only)
+
+Uploads are stored under folder `d_lite_chat/<user_id>/`.
+
 ## `realtime-service` (Socket.IO)
 
 ### Required

@@ -140,8 +140,8 @@ docker compose up --build
 
 ### Media
 
-- `POST /media/upload` (multipart form-data, field: `file`)
-- `DELETE /media/delete` (JSON body: `{ "publicId": "...", "resourceType": "image|video|raw" }`)
+- `POST /chat/media/upload` (multipart form-data, field: `file`; requires auth; stores on **Cloudinary**, returns `url` + `type`)
+- Configure `core-backend`: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` (server-only)
 
 ### Call (Socket.IO)
 

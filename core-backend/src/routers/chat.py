@@ -1,16 +1,129 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import time
 from typing import Any, Dict, Optional
 
 import httpx
-from fastapi import APIRouter, Header, Request
+from fastapi import APIRouter, File, Header, Request, UploadFile
 from fastapi.responses import JSONResponse
 
-from src.settings import SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL, require_supabase
+from src.settings import (
+    CLOUDINARY_API_KEY,
+    CLOUDINARY_API_SECRET,
+    CLOUDINARY_CLOUD_NAME,
+    SUPABASE_SERVICE_ROLE_KEY,
+    SUPABASE_URL,
+    require_supabase,
+)
 from src.supabase import postgrest_headers, safe_json_list, validate_access_token
 
 router = APIRouter()
+
+
+def _cloudinary_signature(params: Dict[str, str], api_secret: str) -> str:
+    """SHA1 signature for Cloudinary signed uploads (sorted key=value joined with &)."""
+    pairs = "&".join(f"{k}={params[k]}" for k in sorted(params.keys()))
+    return hashlib.sha1((pairs + api_secret).encode("utf-8")).hexdigest()
+
+
+@router.post("/media/upload")
+async def upload_chat_media(file: UploadFile = File(...), authorization: Optional[str] = Header(default=None)):
+    """
+    Upload media for chat messages and return a public HTTPS URL (Cloudinary).
+
+    Env (server-side only):
+    - CLOUDINARY_CLOUD_NAME
+    - CLOUDINARY_API_KEY
+    - CLOUDINARY_API_SECRET
+    """
+    require_supabase()
+    user, _access_token = await _require_user(authorization)
+    if not user:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
+    uid = str(user.get("id") or "").strip()
+    if not uid:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
+
+    cloud = (CLOUDINARY_CLOUD_NAME or "").strip()
+    api_key = (CLOUDINARY_API_KEY or "").strip()
+    api_secret = (CLOUDINARY_API_SECRET or "").strip()
+    if not cloud or not api_key or not api_secret:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "success": False,
+                "message": "Cloudinary is not configured (CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET)",
+            },
+        )
+
+    safe_name = (file.filename or "upload").replace("/", "_").replace("\\", "_")
+    folder = f"d_lite_chat/{uid}"
+
+    try:
+        data = await file.read()
+    except Exception:
+        data = b""
+    if not data:
+        return JSONResponse(status_code=400, content={"success": False, "message": "file is required"})
+
+    content_type = file.content_type or "application/octet-stream"
+    t = content_type.lower()
+    if t.startswith("image/"):
+        resource = "image"
+        kind = "image"
+    elif t.startswith("video/"):
+        resource = "video"
+        kind = "video"
+    elif t.startswith("audio/"):
+        # Cloudinary treats many audio uploads under the video API.
+        resource = "video"
+        kind = "audio"
+    else:
+        resource = "raw"
+        kind = "file"
+
+    ts = str(int(time.time()))
+    params_to_sign: Dict[str, str] = {"folder": folder, "timestamp": ts}
+    signature = _cloudinary_signature(params_to_sign, api_secret)
+
+    upload_url = f"https://api.cloudinary.com/v1_1/{cloud}/{resource}/upload"
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            r = await client.post(
+                upload_url,
+                data={
+                    "api_key": api_key,
+                    "timestamp": ts,
+                    "signature": signature,
+                    "folder": folder,
+                },
+                files={"file": (safe_name, data, content_type)},
+            )
+    except Exception as e:
+        return JSONResponse(status_code=503, content={"success": False, "message": _net_err_hint(e)})
+
+    if r.status_code >= 400:
+        err_text = (r.text or "").strip()
+        if len(err_text) > 400:
+            err_text = err_text[:400] + "…"
+        return JSONResponse(
+            status_code=502,
+            content={"success": False, "message": f"Cloudinary upload failed ({r.status_code}): {err_text or r.reason_phrase}"},
+        )
+
+    try:
+        body = r.json()
+    except Exception:
+        return JSONResponse(status_code=502, content={"success": False, "message": "Cloudinary returned invalid JSON"})
+
+    public_url = str(body.get("secure_url") or body.get("url") or "").strip()
+    if not public_url:
+        return JSONResponse(status_code=502, content={"success": False, "message": "Cloudinary response missing URL"})
+
+    return {"success": True, "url": public_url, "type": kind, "contentType": content_type}
 
 
 def _supabase_hint(r: httpx.Response) -> str:
@@ -940,6 +1053,9 @@ async def get_messages(chat_id: str, authorization: Optional[str] = Header(defau
     user, access_token = await _require_user(authorization)
     if not user or not access_token:
         return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
+    uid = str(user.get("id") or "").strip()
+    if not uid:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
 
     url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/messages"
     params = {
@@ -964,7 +1080,73 @@ async def get_messages(chat_id: str, authorization: Optional[str] = Header(defau
         # Pass through common auth/RLS/missing-table codes to make debugging + UI behavior sane.
         status = r.status_code if r.status_code in (400, 401, 403, 404, 406) else 503
         return JSONResponse(status_code=status, content={"success": False, "message": hint})
-    return {"success": True, "chatId": chat_id, "messages": await safe_json_list(r)}
+    messages = await safe_json_list(r)
+
+    # Apply "delete for me" filter (hidden messages).
+    # Requires table `hidden_messages(user_id, chat_id, message_id, created_at)`.
+    try:
+        if messages:
+            hide_url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/hidden_messages"
+            headers_hide = (
+                postgrest_headers(use_service_role=True)
+                if SUPABASE_SERVICE_ROLE_KEY
+                else {"apikey": postgrest_headers(use_service_role=False).get("apikey", ""), "authorization": f"Bearer {access_token}"}
+            )
+            params_hide = {
+                "select": "message_id",
+                "user_id": f"eq.{uid}",
+                "chat_id": f"eq.{chat_id}",
+                "limit": "2000",
+            }
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                r_hide = await client.get(hide_url, headers=headers_hide, params=params_hide)
+            if r_hide.status_code < 400:
+                hidden_rows = await safe_json_list(r_hide)
+                hidden_ids = {str((row or {}).get("message_id") or "").strip() for row in hidden_rows}
+                hidden_ids = {x for x in hidden_ids if x}
+                if hidden_ids:
+                    messages = [m for m in messages if str((m or {}).get("id") or "").strip() not in hidden_ids]
+    except Exception:
+        pass
+
+    # Attach reaction aggregation (emoji -> { userId: true }) so clients can render
+    # consistent reaction pills and they survive refresh.
+    try:
+        ids = [str((m or {}).get("id") or "").strip() for m in (messages or [])]
+        ids = [i for i in ids if i]
+        if ids:
+            rx_url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/message_reactions"
+            headers_rx = (
+                postgrest_headers(use_service_role=True)
+                if SUPABASE_SERVICE_ROLE_KEY
+                else {"apikey": postgrest_headers(use_service_role=False).get("apikey", ""), "authorization": f"Bearer {access_token}"}
+            )
+            params_rx = {
+                "select": "message_id,user_id,emoji",
+                "message_id": f"in.({','.join(ids)})",
+                "limit": "2000",
+            }
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                r_rx = await client.get(rx_url, headers=headers_rx, params=params_rx)
+            if r_rx.status_code < 400:
+                rows = await safe_json_list(r_rx)
+                agg: Dict[str, Dict[str, Dict[str, bool]]] = {}
+                for row in rows:
+                    mid = str((row or {}).get("message_id") or "").strip()
+                    uid = str((row or {}).get("user_id") or "").strip()
+                    emoji = str((row or {}).get("emoji") or "").strip()
+                    if not mid or not uid or not emoji:
+                        continue
+                    agg.setdefault(mid, {}).setdefault(emoji, {})[uid] = True
+                for m in messages:
+                    mid = str((m or {}).get("id") or "").strip()
+                    if mid:
+                        m["reactions"] = agg.get(mid, {})
+    except Exception:
+        # Best-effort only; messages should still load if reactions fail.
+        pass
+
+    return {"success": True, "chatId": chat_id, "messages": messages}
 
 
 @router.post("/messages/{message_id}/delete")
@@ -1073,17 +1255,50 @@ async def edit_message(message_id: str, req: Request, authorization: Optional[st
 @router.post("/messages/{message_id}/hide")
 async def hide_message_for_me(message_id: str, authorization: Optional[str] = Header(default=None)):
     """
-    Minimal "delete for me": hides the entire thread in recent list (per-user),
-    since per-message hide requires an additional table.
+    "Delete for me": hide a message for the current user only.
+    Requires table `hidden_messages(user_id, chat_id, message_id, created_at)`.
     """
     require_supabase()
-    user, _access_token = await _require_user(authorization)
-    if not user:
+    user, access_token = await _require_user(authorization)
+    if not user or not access_token:
         return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
     uid = str(user.get("id") or "").strip()
     if not uid:
         return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
-    # We keep it as a no-op success for now (UI will remove message locally).
+
+    if not SUPABASE_SERVICE_ROLE_KEY:
+        return JSONResponse(status_code=503, content={"success": False, "message": "SUPABASE_SERVICE_ROLE_KEY is required"})
+
+    base = SUPABASE_URL.rstrip("/")
+    msg_url = f"{base}/rest/v1/messages"
+    hide_url = f"{base}/rest/v1/hidden_messages"
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            r_get = await client.get(
+                msg_url,
+                headers=postgrest_headers(use_service_role=True),
+                params={"select": "id,chat_id", "id": f"eq.{message_id}", "limit": "1"},
+            )
+            if r_get.status_code >= 400:
+                return JSONResponse(status_code=_status_map(r_get.status_code), content={"success": False, "message": _supabase_hint(r_get)})
+            rows = await safe_json_list(r_get)
+            msg = rows[0] if rows else None
+            if not msg:
+                return JSONResponse(status_code=404, content={"success": False, "message": "Message not found"})
+            chat_id = str((msg or {}).get("chat_id") or "").strip()
+            if not chat_id:
+                return JSONResponse(status_code=503, content={"success": False, "message": "Message chat_id missing"})
+
+            r_ins = await client.post(
+                hide_url,
+                headers=postgrest_headers(use_service_role=True, extra={"prefer": "resolution=merge-duplicates,return=minimal"}),
+                json={"user_id": uid, "chat_id": chat_id, "message_id": message_id, "created_at": _now_iso()},
+            )
+            if r_ins.status_code not in (200, 201, 204, 409):
+                return JSONResponse(status_code=_status_map(r_ins.status_code), content={"success": False, "message": _supabase_hint(r_ins)})
+    except Exception as e:
+        return JSONResponse(status_code=503, content={"success": False, "message": _net_err_hint(e)})
+
     return {"success": True}
 
 
