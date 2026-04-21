@@ -87,7 +87,7 @@ export function IncomingCallProvider({ children }) {
     setOffer(null);
     // Store flag so CallUI auto-accepts on mount
     try { sessionStorage.setItem('dlite-auto-accept-from', callerId); } catch { /* ignore */ }
-    router.push(`/call?callee=${encodeURIComponent(callerId)}&mode=${mode}`);
+    router.push(`/call?callee=${encodeURIComponent(callerId)}&mode=${mode}&ready=1`);
   }, [offer, router]);
 
   const reject = useCallback(async () => {

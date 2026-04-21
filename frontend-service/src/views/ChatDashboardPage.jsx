@@ -830,12 +830,20 @@ export default function ChatDashboardPage() {
     return () => document.removeEventListener('mousedown', onDoc);
   }, []);
 
-  const pickPeer = (id, username) => {
+  const pickPeer = (id, username, opts) => {
     setActiveUserId(String(id || '').trim());
     setPeerUsername(username);
     setActionError('');
     setAddUserOpen(false);
     setAddUserQuery('');
+    const threadId = String(opts?.threadId || '').trim();
+    if (user?.id && threadId) {
+      // IMPORTANT: backend unread clearing expects threadId (chatId).
+      markRecentDirectChatRead({ threadId }).catch(() => undefined);
+      setRecentChats((prev) =>
+        prev.map((c) => (String(c.threadId || '').trim() === threadId ? { ...c, unreadCount: 0 } : c))
+      );
+    }
   };
 
   const isUuid = (value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || '').trim());
@@ -1542,7 +1550,7 @@ export default function ChatDashboardPage() {
                               setActionError('Chat is locked. Right click to unlock.');
                               return;
                             }
-                            pickPeer(chat.peerId, chat.peerUsername);
+                            pickPeer(chat.peerId, chat.peerUsername, { threadId: chat.threadId });
                           }}
                           onContextMenu={(e) => {
                             e.preventDefault();
@@ -2347,7 +2355,7 @@ export default function ChatDashboardPage() {
                         <button
                           type="button"
                           className="shrink-0 rounded-full bg-gradient-to-r from-ui-grad-from to-ui-grad-to px-3 py-1 text-[11px] font-semibold text-white shadow-sm hover:brightness-110"
-                          onClick={() => pickPeer(chat.peerId, chat.peerUsername)}
+                          onClick={() => pickPeer(chat.peerId, chat.peerUsername, { threadId: chat.threadId })}
                         >
                           Add
                         </button>

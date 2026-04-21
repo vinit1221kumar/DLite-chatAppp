@@ -866,7 +866,8 @@ export default function CallUI({
   const activeMode = incomingOffer?.mode ?? callMode;
   const isEnhanced = theme === "enhanced";
   const isVideoMode = activeMode === "video";
-  const canShowCallWorkspace = !requireExplicitStart || explicitReady;
+  // If a call is incoming, we must show the call screen even without `ready=1`.
+  const canShowCallWorkspace = !requireExplicitStart || explicitReady || hasIncomingCall;
   const showWhatsAppCallScreen =
     canShowCallWorkspace &&
     (explicitReady ||
