@@ -1,7 +1,8 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Maximize2,
   Mic,
@@ -48,6 +49,7 @@ import {
 } from "@/lib/webrtc";
 import { CallMode, ConnectionStatus, OfferPayload } from "@/types/call";
 import { cn } from "@/lib/utils";
+import { CallHistoryItem, createCallHistoryId, upsertCallHistoryItem } from "@/lib/callHistory";
 
 type UnsubscribeFn = () => void;
 type CallUITheme = "default" | "enhanced";
@@ -57,6 +59,9 @@ interface CallUIProps {
   title?: string;
   description?: string;
   theme?: CallUITheme;
+  showUserPanel?: boolean;
+  requireExplicitStart?: boolean;
+  showHero?: boolean;
 }
 
 function createRingtonePlayer() {
@@ -120,14 +125,18 @@ export default function CallUI({
   title = "Direct voice and video calls",
   description = "Call another signed-in user. The receiver can accept or reject from the same page.",
   theme = "default",
+  showUserPanel = true,
+  requireExplicitStart = false,
+  showHero = true,
 }: CallUIProps) {
   const auth = useAuthContext();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const currentUserId = auth?.user?.id as string | undefined;
+  const explicitReady = searchParams.get("ready") === "1";
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
-  // FIX: Voice calls need a real audio element to play the remote audio track.
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteStreamRef = useRef<MediaStream | null>(null);
@@ -139,6 +148,8 @@ export default function CallUI({
   const sessionUnsubRefs = useRef<UnsubscribeFn[]>([]);
   const incomingCallUnsubRef = useRef<UnsubscribeFn | null>(null);
   const ringtoneRef = useRef(createRingtonePlayer());
+  const callHistoryRef = useRef<CallHistoryItem | null>(null);
+  const persistCallHistoryRef = useRef<(patch: Partial<CallHistoryItem>) => void>(() => undefined);
 
   const calleeParam = searchParams.get("callee")?.trim() ?? "";
   const queryMode = searchParams.get("mode");
@@ -148,6 +159,8 @@ export default function CallUI({
   const screenStreamRef = useRef<MediaStream | null>(null);
   const durationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const overlayVideoRef = useRef<HTMLVideoElement>(null);
+  const callScreenRef = useRef<HTMLDivElement>(null);
+  const [isBrowserFullscreen, setIsBrowserFullscreen] = useState(false);
 
   const [calleeId, setCalleeId] = useState(calleeParam);
   const [calleeUsername, setCalleeUsername] = useState<string>("");
@@ -166,13 +179,13 @@ export default function CallUI({
   const [cameraEnabled, setCameraEnabled] = useState(defaultMode === "video");
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
-  const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
     setCalleeId(calleeParam);
   }, [calleeParam]);
 
   useEffect(() => {
+    if (!showUserPanel) return;
     if (!currentUserId) return;
     const term = userQuery.trim();
     if (!term) {
@@ -201,7 +214,6 @@ export default function CallUI({
   }, [currentUserId, userQuery]);
 
   useEffect(() => {
-    // If user types/changes calleeId manually, clear the username label.
     setCalleeUsername("");
   }, [calleeId]);
 
@@ -222,7 +234,6 @@ export default function CallUI({
   }, [peerId]);
 
   useEffect(() => {
-    // FIX: Show display name/email instead of raw userId in call UI.
     const id = incomingOffer?.fromUserId || peerId;
     if (!id) {
       setPeerDisplayName("");
@@ -234,10 +245,7 @@ export default function CallUI({
       try {
         const profile = await getUserProfileById(id);
         if (cancelled) return;
-        const next =
-          profile?.username ||
-          (profile?.email ? profile.email.split("@")[0] : "") ||
-          "";
+        const next = profile?.username || (profile?.email ? profile.email.split("@")[0] : "") || "";
         setPeerDisplayName(next);
       } catch {
         if (!cancelled) setPeerDisplayName("");
@@ -249,7 +257,6 @@ export default function CallUI({
     };
   }, [incomingOffer?.fromUserId, peerId]);
 
-  // Call duration timer
   useEffect(() => {
     if (status === "connected") {
       setCallDuration(0);
@@ -306,7 +313,7 @@ export default function CallUI({
     resetLocalState();
   }, [clearMediaElements, clearSessionListeners, resetLocalState, stopAllTracks]);
 
-  const setupMedia = useCallback(async (mode: CallMode) => {
+  const setupMedia = useCallback(async (mode: CallMode): Promise<MediaStream | null> => {
     setStatus("requesting-media");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -322,13 +329,55 @@ export default function CallUI({
       return stream;
     } catch (mediaError) {
       console.error("Failed to get user media", mediaError);
-      throw new Error(
+      const msg =
         mode === "video"
           ? "Could not access microphone/camera. Please verify permissions."
-          : "Could not access microphone. Please verify permissions."
-      );
+          : "Could not access microphone. Please verify permissions.";
+      setError(msg);
+      setStatus("failed");
+      return null;
     }
   }, []);
+
+  const persistCallHistory = useCallback(
+    (patch: Partial<CallHistoryItem>) => {
+      if (!currentUserId) return;
+      if (typeof window === "undefined") return;
+
+      const now = Date.now();
+      const existing = callHistoryRef.current;
+      const base: CallHistoryItem =
+        existing ||
+        ({
+          id: createCallHistoryId(),
+          userId: currentUserId,
+          peerId: String(patch.peerId || peerIdRef.current || calleeId || "").trim(),
+          peerName: patch.peerName,
+          mode: (patch.mode as "audio" | "video") || (callModeRef.current as "audio" | "video"),
+          direction: patch.direction || "outgoing",
+          outcome: patch.outcome || "calling",
+          startedAt: patch.startedAt || now,
+        } as CallHistoryItem);
+
+      const next: CallHistoryItem = {
+        ...base,
+        ...patch,
+        peerId: String(patch.peerId ?? base.peerId ?? "").trim(),
+        peerName: patch.peerName ?? base.peerName,
+        mode: (patch.mode as "audio" | "video") ?? base.mode,
+        direction: patch.direction ?? base.direction,
+        outcome: patch.outcome ?? base.outcome,
+      };
+
+      callHistoryRef.current = next;
+      upsertCallHistoryItem(currentUserId, next);
+    },
+    [calleeId, currentUserId]
+  );
+
+  useEffect(() => {
+    persistCallHistoryRef.current = persistCallHistory;
+  }, [persistCallHistory]);
 
   const setupPeerConnection = useCallback((userId: string, targetPeerId: string) => {
     pendingIceCandidatesRef.current = [];
@@ -338,7 +387,6 @@ export default function CallUI({
     if (remoteVideoRef.current) {
       remoteVideoRef.current.srcObject = remoteStream;
     }
-    // FIX: Voice calls require attaching remote stream to an <audio> element.
     if (remoteAudioRef.current) {
       remoteAudioRef.current.srcObject = remoteStream;
     }
@@ -364,16 +412,19 @@ export default function CallUI({
         if (nextState === "connected") {
           setStatus("connected");
           setError(null);
+          persistCallHistoryRef.current({ outcome: "connected" });
         } else if (nextState === "failed") {
           setStatus("failed");
           const hasTurn = iceConfigHasRelayServer(DEFAULT_ICE_SERVERS);
           setError(
             hasTurn
               ? "WebRTC ICE failed and the browser could not use your TURN relay. Check: turn: vs turns: (TLS cert must be valid), username/password match coturn, ports 3478 UDP/TCP (and 5349 for TLS) open, and Vercel env NEXT_PUBLIC_ICE_SERVERS_JSON matches production. Use about:webrtc → Connection log for relay errors."
-              : "Connection failed — this network usually needs TURN. Set NEXT_PUBLIC_ICE_SERVERS_JSON with STUN + TURN on Vercel, redeploy, then retry (see docs/ENVIRONMENT_VARIABLES.md).",
+              : "Connection failed — this network usually needs TURN. Set NEXT_PUBLIC_ICE_SERVERS_JSON with STUN + TURN on Vercel, redeploy, then retry (see docs/ENVIRONMENT_VARIABLES.md)."
           );
+          persistCallHistoryRef.current({ outcome: "failed", endedAt: Date.now() });
         } else if (nextState === "disconnected" || nextState === "closed") {
           setStatus("ended");
+          persistCallHistoryRef.current({ outcome: "ended", endedAt: Date.now() });
         }
       },
     });
@@ -447,6 +498,15 @@ export default function CallUI({
     try {
       const mode = callModeRef.current;
       const stream = await setupMedia(mode);
+      if (!stream) return;
+      persistCallHistory({
+        peerId: targetUserId,
+        peerName: calleeUsername || undefined,
+        mode,
+        direction: "outgoing",
+        outcome: "calling",
+        startedAt: Date.now(),
+      });
       const peerConnection = setupPeerConnection(currentUserId, targetUserId);
       attachLocalTracks(peerConnection, stream);
 
@@ -463,7 +523,6 @@ export default function CallUI({
         async (answer) => {
           if (!answer || !peerConnectionRef.current) return;
           await applyRemoteDescription({ type: answer.type, sdp: answer.sdp });
-          // Avoid overriding "connected" if ICE/DTLS finishes quickly.
           setStatus((prev) => (prev === "connected" ? prev : "connecting"));
         },
         { fromUserId: targetUserId }
@@ -477,6 +536,7 @@ export default function CallUI({
           await endCall({ userId: currentUserId, peerUserId: targetUserId });
           await hardCleanup();
           setStatus("ended");
+          persistCallHistory({ outcome: "rejected", endedAt: Date.now() });
         },
         { fromUserId: targetUserId }
       );
@@ -487,6 +547,7 @@ export default function CallUI({
           if (!payload) return;
           await hardCleanup();
           setStatus("ended");
+          persistCallHistory({ outcome: "ended", endedAt: Date.now() });
         },
         { fromUserId: targetUserId }
       );
@@ -500,6 +561,7 @@ export default function CallUI({
       setError(startError instanceof Error ? startError.message : "Failed to start call.");
       await hardCleanup();
       setStatus("failed");
+      persistCallHistory({ outcome: "failed", endedAt: Date.now() });
     } finally {
       setIsBusy(false);
     }
@@ -512,16 +574,9 @@ export default function CallUI({
     setupMedia,
     setupPeerConnection,
     subscribeForRemoteIce,
+    persistCallHistory,
+    calleeUsername,
   ]);
-
-  const startCallWithMode = useCallback(
-    async (mode: CallMode) => {
-      callModeRef.current = mode;
-      setCallMode(mode);
-      await beginCall();
-    },
-    [beginCall]
-  );
 
   const acceptIncomingCall = useCallback(async () => {
     if (!currentUserId || !incomingOffer) return;
@@ -534,6 +589,15 @@ export default function CallUI({
     try {
       const callerId = incomingOffer.fromUserId;
       const stream = await setupMedia(incomingOffer.mode);
+      if (!stream) return;
+      persistCallHistory({
+        peerId: callerId,
+        peerName: peerDisplayName || undefined,
+        mode: incomingOffer.mode,
+        direction: "incoming",
+        outcome: "connecting",
+        startedAt: Date.now(),
+      });
       const peerConnection = setupPeerConnection(currentUserId, callerId);
       attachLocalTracks(peerConnection, stream);
       await applyRemoteDescription(incomingOffer);
@@ -548,6 +612,7 @@ export default function CallUI({
           if (!payload) return;
           await hardCleanup();
           setStatus("ended");
+          persistCallHistory({ outcome: "ended", endedAt: Date.now() });
         },
         { fromUserId: callerId }
       );
@@ -556,13 +621,13 @@ export default function CallUI({
       setPeerId(callerId);
       setIncomingOffer(null);
       setCallMode(incomingOffer.mode);
-      // Avoid overriding "connected" if onConnectionStateChange already fired.
       setStatus((prev) => (prev === "connected" ? prev : "connecting"));
     } catch (acceptError) {
       console.error("Failed to accept call", acceptError);
       setError(acceptError instanceof Error ? acceptError.message : "Failed to accept call.");
       await hardCleanup();
       setStatus("failed");
+      persistCallHistory({ outcome: "failed", endedAt: Date.now() });
     } finally {
       setIsBusy(false);
     }
@@ -575,6 +640,8 @@ export default function CallUI({
     setupMedia,
     setupPeerConnection,
     subscribeForRemoteIce,
+    persistCallHistory,
+    peerDisplayName,
   ]);
 
   const rejectIncomingCall = useCallback(async () => {
@@ -584,11 +651,32 @@ export default function CallUI({
       ringtoneRef.current.stop();
       setIncomingOffer(null);
       setStatus("ended");
+      persistCallHistory({
+        peerId: incomingOffer.fromUserId,
+        peerName: peerDisplayName || undefined,
+        mode: incomingOffer.mode,
+        direction: "incoming",
+        outcome: "rejected",
+        startedAt: Date.now(),
+        endedAt: Date.now(),
+      });
     } catch (rejectError) {
       console.error("Failed to reject incoming call", rejectError);
       setError("Could not reject incoming call.");
     }
-  }, [currentUserId, incomingOffer]);
+  }, [currentUserId, incomingOffer, peerDisplayName, persistCallHistory]);
+
+  const clearExplicitReady = useCallback(
+    (opts?: { keepCallee?: boolean }) => {
+      const next = new URLSearchParams(searchParams.toString());
+      next.delete("ready");
+      next.delete("mode");
+      if (!opts?.keepCallee) next.delete("callee");
+      const qs = next.toString();
+      router.replace(qs ? `/call?${qs}` : "/call");
+    },
+    [router, searchParams]
+  );
 
   const leaveCall = useCallback(async () => {
     if (!currentUserId) return;
@@ -602,8 +690,10 @@ export default function CallUI({
     } finally {
       await hardCleanup();
       setStatus("ended");
+      persistCallHistory({ outcome: "ended", endedAt: Date.now() });
+      if (explicitReady) clearExplicitReady({ keepCallee: true });
     }
-  }, [currentUserId, hardCleanup, peerId]);
+  }, [clearExplicitReady, currentUserId, explicitReady, hardCleanup, peerId, persistCallHistory]);
 
   const toggleMic = useCallback(() => {
     const stream = localStreamRef.current;
@@ -666,7 +756,7 @@ export default function CallUI({
         };
         setIsScreenSharing(true);
       } catch {
-        /* user cancelled or permission denied */
+        /* ignore */
       }
     }
   }, [isScreenSharing]);
@@ -679,14 +769,39 @@ export default function CallUI({
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   }
 
-  // Sync remote stream to overlay video element when connected
   useEffect(() => {
     if (status === "connected" && overlayVideoRef.current && remoteStreamRef.current) {
       overlayVideoRef.current.srcObject = remoteStreamRef.current;
     }
   }, [status]);
 
-  // Auto-accept call when navigated from global incoming call overlay
+  useEffect(() => {
+    const wantsShare = searchParams.get("share") === "1";
+    if (!wantsShare) return;
+    if (status !== "connected") return;
+    if (callModeRef.current !== "video") return;
+    if (isScreenSharing) return;
+    toggleScreenShare().catch(() => undefined);
+  }, [status, isScreenSharing]);
+
+  useEffect(() => {
+    const onFs = () => setIsBrowserFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", onFs);
+    onFs();
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+
+  const toggleBrowserFullscreen = useCallback(async () => {
+    const el = callScreenRef.current;
+    if (!el) return;
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await el.requestFullscreen();
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   useEffect(() => {
     if (status !== "ringing" || !incomingOffer || isBusy) return;
     try {
@@ -695,7 +810,9 @@ export default function CallUI({
         sessionStorage.removeItem("dlite-auto-accept-from");
         acceptIncomingCall();
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, [status, incomingOffer, isBusy, acceptIncomingCall]);
 
   useEffect(() => {
@@ -737,19 +854,28 @@ export default function CallUI({
     };
   }, [currentUserId, hardCleanup]);
 
-  // If the peer disconnects / call ends remotely, ensure we stop camera/mic too.
   useEffect(() => {
     if (status === "ended" || status === "failed") {
       hardCleanup().catch(() => undefined);
+      if (explicitReady) clearExplicitReady({ keepCallee: true });
     }
-  }, [status, hardCleanup]);
+  }, [status, hardCleanup, explicitReady, clearExplicitReady]);
 
   const canToggleCamera = Boolean(localStreamRef.current?.getVideoTracks().length);
   const hasIncomingCall = Boolean(incomingOffer);
   const activeMode = incomingOffer?.mode ?? callMode;
   const isEnhanced = theme === "enhanced";
   const isVideoMode = activeMode === "video";
-  const hasSelectedCallee = Boolean(calleeId.trim());
+  const canShowCallWorkspace = !requireExplicitStart || explicitReady;
+  const showWhatsAppCallScreen =
+    canShowCallWorkspace &&
+    (explicitReady ||
+      hasIncomingCall ||
+      status === "calling" ||
+      status === "connecting" ||
+      status === "connected" ||
+      status === "ringing");
+
   const heroIcon = isVideoMode ? Video : PhoneCall;
   const HeroIcon = heroIcon;
   const statusToneClass =
@@ -758,448 +884,489 @@ export default function CallUI({
       : status === "failed"
         ? "text-rose-700 dark:text-rose-300"
         : status === "ringing"
-          ? "text-amber-800 dark:text-sky-300"
-          : "text-amber-900 dark:text-slate-100";
+          ? "text-fuchsia-700 dark:text-sky-300"
+          : "text-slate-900 dark:text-slate-100";
   const panelClassName = isEnhanced
-    ? "card relative overflow-hidden border-amber-200/80 bg-white/85 p-5 shadow-xl shadow-amber-200/35 dark:border-navy-700/50 dark:bg-navy-950/80"
+    ? "card relative overflow-hidden border-slate-200/70 bg-white/90 p-5 shadow-xl shadow-slate-200/40 dark:border-white/10 dark:bg-[#0b0f19]/80"
     : "rounded-lg border border-slate-200 p-4 dark:border-navy-700";
-  const fieldClassName = isEnhanced ? "input" : "rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-sky-500 dark:border-navy-600 dark:bg-navy-950 dark:text-slate-50";
+  const fieldClassName = isEnhanced
+    ? "h-11 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-fuchsia-300 focus:ring-2 focus:ring-fuchsia-200/60 dark:border-white/10 dark:bg-white/5 dark:text-slate-50 dark:placeholder:text-slate-400 dark:focus:border-fuchsia-400/60 dark:focus:ring-fuchsia-500/20"
+    : "rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-sky-500 dark:border-navy-600 dark:bg-navy-950 dark:text-slate-50";
   const videoFrameClassName = isEnhanced
-    ? "aspect-video w-full rounded-[1.4rem] bg-slate-950 object-cover ring-1 ring-white/10"
+    ? "aspect-video w-full rounded-[1.4rem] bg-black object-cover ring-1 ring-black/10 dark:ring-white/10"
     : "aspect-video w-full rounded bg-slate-900 object-cover";
   const audioFrameClassName = isEnhanced
-    ? "flex aspect-video items-center justify-center rounded-[1.4rem] bg-[radial-gradient(circle_at_top,rgba(251,191,36,0.18),transparent_40%),linear-gradient(145deg,#111827,#020617)] text-sm text-slate-100 ring-1 ring-white/10 dark:bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.14),transparent_40%),linear-gradient(145deg,#0f172a,#020617)]"
+    ? "flex aspect-video items-center justify-center rounded-[1.4rem] bg-[radial-gradient(circle_at_top,rgba(236,72,153,0.18),transparent_44%),radial-gradient(circle_at_bottom,rgba(249,115,22,0.12),transparent_46%),linear-gradient(145deg,#0b0f19,#000)] text-sm text-slate-100 ring-1 ring-black/10 dark:ring-white/10"
     : "flex aspect-video items-center justify-center rounded bg-slate-900 text-sm text-slate-200";
 
   return (
     <>
-    {/* WhatsApp-style fullscreen connected overlay */}
-    {status === "connected" && (
-      <div className={cn("fixed inset-0 z-[200] flex flex-col bg-black", isFullscreen ? "" : "")}>
-        {/* Remote video — fills background */}
-        {activeMode === "video" ? (
-          <video
-            ref={overlayVideoRef}
-            autoPlay
-            playsInline
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-slate-900 to-black">
-            <div className="flex flex-col items-center gap-4">
-              <div className="flex h-24 w-24 items-center justify-center rounded-full bg-white/10 text-white">
-                <span className="text-4xl font-bold">{(peerDisplayName || "?").slice(0, 1).toUpperCase()}</span>
-              </div>
-              <p className="text-lg font-semibold text-white">{peerDisplayName || peerId}</p>
-              <p className="animate-pulse text-sm text-white/70">Voice call connected</p>
-            </div>
-          </div>
-        )}
-
-        {/* Top bar */}
-        <div className="relative z-10 flex items-start justify-between px-5 pt-10 pb-4 bg-gradient-to-b from-black/60 to-transparent">
-          <div>
-            <p className="text-lg font-bold text-white drop-shadow">{peerDisplayName || peerId}</p>
-            <div className="mt-1 flex items-center gap-1.5">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-              <span className="text-sm font-semibold text-emerald-300">{formatDuration(callDuration)}</span>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => setIsFullscreen((v) => !v)}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-sm hover:bg-white/25"
-            aria-label="Toggle fullscreen"
-          >
-            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          </button>
-        </div>
-
-        {/* PiP local video */}
-        {activeMode === "video" && (
-          <div className="absolute right-4 top-20 z-20 h-32 w-24 overflow-hidden rounded-2xl border-2 border-white/30 shadow-2xl sm:h-40 sm:w-28">
-            <video ref={localVideoRef} autoPlay muted playsInline className="h-full w-full object-cover" />
-          </div>
-        )}
-
-        {/* Bottom controls */}
-        <div className="relative z-10 mt-auto flex items-center justify-center gap-5 px-6 pb-12 pt-6 bg-gradient-to-t from-black/70 to-transparent">
-          <button
-            type="button"
-            onClick={toggleMic}
-            className={cn("flex h-14 w-14 flex-col items-center justify-center gap-1 rounded-full text-white transition-colors", micEnabled ? "bg-white/20 hover:bg-white/30" : "bg-red-500 hover:bg-red-600")}
-            aria-label={micEnabled ? "Mute" : "Unmute"}
-          >
-            {micEnabled ? <Mic className="h-6 w-6" /> : <MicOff className="h-6 w-6" />}
-          </button>
-          {activeMode === "video" && (
-            <button
-              type="button"
-              onClick={toggleCamera}
-              disabled={!canToggleCamera}
-              className={cn("flex h-14 w-14 items-center justify-center rounded-full text-white transition-colors", cameraEnabled ? "bg-white/20 hover:bg-white/30" : "bg-slate-600 hover:bg-slate-700")}
-              aria-label={cameraEnabled ? "Camera off" : "Camera on"}
-            >
-              {cameraEnabled ? <Video className="h-6 w-6" /> : <VideoOff className="h-6 w-6" />}
-            </button>
-          )}
-          {activeMode === "video" && (
-            <button
-              type="button"
-              onClick={toggleScreenShare}
-              className={cn(
-                "flex h-14 w-14 items-center justify-center rounded-full text-white transition-colors",
-                isScreenSharing ? "bg-ui-accent hover:brightness-110" : "bg-white/20 hover:bg-white/30",
-              )}
-              aria-label={isScreenSharing ? "Stop sharing" : "Share screen"}
-            >
-              {isScreenSharing ? <MonitorOff className="h-6 w-6" /> : <Monitor className="h-6 w-6" />}
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={leaveCall}
-            className="flex h-16 w-16 items-center justify-center rounded-full bg-red-500 text-white shadow-lg hover:bg-red-600"
-            aria-label="End call"
-          >
-            <PhoneOff className="h-7 w-7" />
-          </button>
-        </div>
-      </div>
-    )}
-    <section className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-8">
-      <div
-        className={cn(
-          "space-y-2",
-          isEnhanced &&
-            "relative overflow-hidden rounded-[1.75rem] border border-amber-200/70 bg-gradient-to-br from-amber-100/85 via-yellow-50/80 to-white/75 px-5 py-5 shadow-[0_24px_80px_-40px_rgba(217,119,6,0.35)] dark:border-navy-700/50 dark:bg-gradient-to-br dark:from-navy-900/85 dark:via-navy-950/90 dark:to-slate-950/80"
-        )}
-      >
-        {isEnhanced ? (
-          <>
-            <div className="anim-glow pointer-events-none absolute -right-8 top-0 h-28 w-28 rounded-full bg-amber-300/30 dark:bg-ui-accent/15" />
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <div className="badge mb-2 inline-flex">
-                  {isVideoMode ? "Live video" : "Live voice"}
-                </div>
-                <h1 className="text-2xl font-bold tracking-tight text-amber-950 dark:text-slate-50 sm:text-3xl">
-                  {title}
-                </h1>
-                <p className="mt-2 max-w-2xl text-sm text-amber-900/85 dark:text-slate-200/80">
-                  {description}
-                </p>
-              </div>
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-amber-200/80 bg-white/75 text-amber-700 shadow-sm dark:border-navy-700/60 dark:bg-navy-900/75 dark:text-sky-300">
-                <HeroIcon className="h-5 w-5" />
-              </div>
-            </div>
-          </>
-        ) : (
-          <>
-            <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-50">{title}</h1>
-            <p className="text-sm text-slate-600 dark:text-slate-300">{description}</p>
-          </>
-        )}
-      </div>
-
-      <div className="grid gap-5 lg:grid-cols-[minmax(260px,340px)_minmax(0,1fr)]">
-        {/* Left: chat-like user list */}
-        <aside className="card overflow-hidden border-amber-200/80 bg-white/80 p-0 dark:border-navy-700/50 dark:bg-navy-950/75">
-          <div className="border-b border-amber-200/60 bg-amber-50/50 px-4 py-3 dark:border-navy-700/40 dark:bg-navy-950/50">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-sm font-semibold text-amber-950 dark:text-slate-100">
-                <Users className="h-4 w-4 shrink-0 text-amber-600 dark:text-sky-400" />
-                Users
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="secondary"
-                  className="h-9 w-9 rounded-xl"
-                  disabled={isBusy || !currentUserId || !hasSelectedCallee}
-                  title="Voice call"
-                  aria-label="Voice call"
-                  onClick={() => startCallWithMode("audio")}
-                >
-                  <Phone className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="secondary"
-                  className="h-9 w-9 rounded-xl"
-                  disabled={isBusy || !currentUserId || !hasSelectedCallee}
-                  title="Video call"
-                  aria-label="Video call"
-                  onClick={() => startCallWithMode("video")}
-                >
-                  <Video className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-            <input
-              value={userQuery}
-              onChange={(event) => setUserQuery(event.target.value)}
-              placeholder="Search username…"
-              className={cn(fieldClassName, "mt-3")}
-            />
-          </div>
-
-          <div className="max-h-[42vh] overflow-y-auto p-2 lg:max-h-none lg:flex-1">
-            {userLoading ? (
-              <div className="px-3 py-4 text-sm text-amber-800/80 dark:text-slate-300/80">Searching…</div>
-            ) : userResults.length === 0 ? (
-              <div className="px-3 py-4 text-sm text-amber-800/70 dark:text-slate-300/75">No users found.</div>
-            ) : (
-              <div className="space-y-1">
-                {userResults.map((u) => {
-                  const selected = calleeId.trim() === u.id;
-                  return (
-                    <button
-                      key={u.id}
-                      type="button"
-                      className={cn(
-                        "flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left transition-colors",
-                        selected
-                          ? "border-amber-300/80 bg-amber-100/70 dark:border-navy-600/60 dark:bg-navy-900/50"
-                          : "border-amber-200/70 bg-white/70 hover:bg-amber-50 dark:border-navy-700/50 dark:bg-navy-950/40 dark:hover:bg-navy-900/50"
-                      )}
-                      onClick={() => {
-                        setCalleeId(u.id);
-                        setCalleeUsername(u.username);
-                      }}
-                    >
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-200/80 text-xs font-bold text-amber-900 dark:bg-navy-800/80 dark:text-slate-100">
-                        {(u.username || "?").slice(0, 1).toUpperCase()}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold text-amber-950 dark:text-slate-100">
-                          {u.username}
-                        </span>
-                        <span className="block truncate font-mono text-[11px] opacity-60">{u.id.slice(0, 6)}…</span>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          <div className="border-t border-amber-200/60 bg-white/70 px-4 py-3 text-xs dark:border-navy-700/40 dark:bg-navy-950/60 dark:text-slate-200">
-            Selected: <span className="font-semibold">{calleeUsername || (calleeId ? "User selected" : "None")}</span>
-          </div>
-        </aside>
-
-        {/* Right: existing controls + streams */}
-        <div className="min-w-0">
-
-      <div
-        className={cn(
-          "flex flex-wrap gap-3",
-          isEnhanced &&
-            "rounded-[1.5rem] border border-amber-200/70 bg-white/65 p-3 shadow-lg shadow-amber-100/30 dark:border-navy-700/50 dark:bg-navy-950/55"
-        )}
-      >
-        <Button
-          type="button"
-          onClick={beginCall}
-          disabled={isBusy || !currentUserId}
-          className={cn(isEnhanced && "rounded-2xl px-5")}
-        >
-          <PhoneCall className="mr-2 h-4 w-4" />
-          {isBusy ? "Connecting..." : "Start call"}
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={acceptIncomingCall}
-          disabled={isBusy || !hasIncomingCall}
-          className={cn(isEnhanced && "rounded-2xl px-5")}
-        >
-          <PhoneIncoming className="mr-2 h-4 w-4" />
-          Accept
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={rejectIncomingCall}
-          disabled={isBusy || !hasIncomingCall}
-          className={cn(isEnhanced && "rounded-2xl px-5")}
-        >
-          <PhoneOff className="mr-2 h-4 w-4" />
-          Reject
-        </Button>
-        <Button
-          type="button"
-          variant="destructive"
-          onClick={leaveCall}
-          disabled={!peerId && !hasIncomingCall}
-          className={cn(isEnhanced && "rounded-2xl px-5")}
-        >
-          <Phone className="mr-2 h-4 w-4" />
-          End
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={toggleMic}
-          disabled={!localStreamRef.current}
-          className={cn(isEnhanced && "rounded-2xl px-5")}
-        >
-          {micEnabled ? <Mic className="mr-2 h-4 w-4" /> : <MicOff className="mr-2 h-4 w-4" />}
-          {micEnabled ? "Mute mic" : "Unmute mic"}
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={toggleCamera}
-          disabled={!canToggleCamera}
-          className={cn(isEnhanced && "rounded-2xl px-5")}
-        >
-          {cameraEnabled ? (
-            <>
-              <VideoOff className="mr-2 h-4 w-4" />
-              Camera off
-            </>
-          ) : (
-            <>
-              <Video className="mr-2 h-4 w-4" />
-              Camera on
-            </>
-          )}
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={toggleScreenShare}
-          disabled={status !== "connected" || !isVideoMode}
+      {showWhatsAppCallScreen ? (
+        <div
+          ref={callScreenRef}
           className={cn(
-            isEnhanced && "rounded-2xl px-5",
-            isScreenSharing && "border-ui-accent/35 bg-ui-accent-subtle text-ui-accent-text dark:text-ui-accent-text",
+            "relative flex w-full flex-col overflow-hidden rounded-[1.75rem] bg-black shadow-2xl shadow-black/35",
+            isBrowserFullscreen ? "h-[100vh] rounded-none" : "min-h-[70vh]"
           )}
         >
-          {isScreenSharing ? <MonitorOff className="mr-2 h-4 w-4" /> : <Monitor className="mr-2 h-4 w-4" />}
-          {isScreenSharing ? "Stop share" : "Share screen"}
-        </Button>
-        {status === "connected" && (
-          <div className={cn("flex items-center gap-2 rounded-2xl border border-emerald-200/70 bg-emerald-50/70 px-4 py-2 text-sm font-semibold text-emerald-700 dark:border-emerald-700/40 dark:bg-emerald-900/20 dark:text-emerald-300", isEnhanced && "rounded-2xl")}>
-            <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
-            {formatDuration(callDuration)}
-          </div>
-        )}
-      </div>
+          {activeMode === "video" ? (
+            <video ref={overlayVideoRef} autoPlay playsInline className="absolute inset-0 h-full w-full object-cover" />
+          ) : (
+            <div className="absolute inset-0 bg-gradient-to-b from-slate-950 to-black" />
+          )}
+          <div className="absolute inset-0 bg-black/15" />
 
-      <div className={panelClassName}>
-        {isEnhanced && (
-          <div className="pointer-events-none absolute right-0 top-0 h-20 w-20 rounded-full bg-amber-300/15 blur-2xl dark:bg-ui-accent/10" />
-        )}
-        <div className="grid gap-3 sm:grid-cols-4">
-          <div className="rounded-2xl border border-amber-200/60 bg-amber-50/70 px-4 py-3 dark:border-navy-700/50 dark:bg-navy-900/50">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700/80 dark:text-slate-400">
-              Status
-            </div>
-            <div className={cn("mt-1 text-sm font-semibold", statusToneClass)}>{getStatusLabel(status)}</div>
-          </div>
-          <div className="rounded-2xl border border-amber-200/60 bg-amber-50/70 px-4 py-3 dark:border-navy-700/50 dark:bg-navy-900/50">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700/80 dark:text-slate-400">
-              Connection
-            </div>
-            <div className="mt-1 text-sm font-semibold text-amber-950 dark:text-slate-50">{connectionState}</div>
-          </div>
-          <div className="rounded-2xl border border-amber-200/60 bg-amber-50/70 px-4 py-3 dark:border-navy-700/50 dark:bg-navy-900/50">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700/80 dark:text-slate-400">
-              Mode
-            </div>
-            <div className="mt-1 text-sm font-semibold text-amber-950 dark:text-slate-50">
-              {activeMode === "video" ? "Video" : "Voice"}
-            </div>
-          </div>
-          <div className="rounded-2xl border border-amber-200/60 bg-amber-50/70 px-4 py-3 dark:border-navy-700/50 dark:bg-navy-900/50">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700/80 dark:text-slate-400">
-              Peer
-            </div>
-            <div className="mt-1 truncate text-sm font-semibold text-amber-950 dark:text-slate-50">
-              {peerDisplayName || incomingOffer?.fromUserId || peerId || "Waiting"}
-            </div>
-          </div>
-        </div>
-        {error ? <p className="mt-4 text-sm text-rose-600 dark:text-rose-400">{error}</p> : null}
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className={panelClassName}>
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Local stream</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                {isVideoMode ? "Your camera preview" : "Your microphone is live"}
+          <div className="relative z-10 flex items-start justify-between gap-3 px-5 pt-6 sm:pt-8">
+            <div className="min-w-0">
+              <p className="truncate text-base font-semibold text-white drop-shadow">
+                {peerDisplayName || peerId || "Call"}
+              </p>
+              <p className="mt-1 text-sm text-white/75">
+                {status === "connected" ? formatDuration(callDuration) : getStatusLabel(status)}
               </p>
             </div>
-            {isEnhanced && (
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-100/90 text-amber-700 dark:bg-navy-900/80 dark:text-sky-300">
-                {isVideoMode ? <UserRound className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={toggleBrowserFullscreen}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-sm hover:bg-white/20"
+                aria-label={isBrowserFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+                title={isBrowserFullscreen ? "Exit fullscreen" : "Fullscreen"}
+              >
+                {isBrowserFullscreen ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+              </button>
+            </div>
           </div>
-          {activeMode === "video" ? (
-            <video
-              ref={localVideoRef}
-              autoPlay
-              muted
-              playsInline
-              className={videoFrameClassName}
-            />
-          ) : (
-            <div className={audioFrameClassName}>
-              <div className="space-y-3 text-center">
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-white/10 bg-white/5">
-                  <Mic className="h-7 w-7" />
+
+          {activeMode !== "video" && (
+            <div className="relative z-10 flex min-h-0 flex-1 items-center justify-center px-6">
+              <div className="flex flex-col items-center gap-4">
+                <div className="flex h-28 w-28 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-white/10">
+                  <span className="text-5xl font-bold">
+                    {(peerDisplayName || peerId || "?").slice(0, 1).toUpperCase()}
+                  </span>
                 </div>
-                <div className="text-sm font-medium text-slate-100">Microphone active for voice call</div>
+                <p className="text-lg font-semibold text-white">{peerDisplayName || peerId || "Waiting"}</p>
+                <p className="text-sm text-white/70">{status === "connected" ? "Voice call" : getStatusLabel(status)}</p>
               </div>
             </div>
           )}
+
+          {activeMode === "video" && (
+            <div className="absolute bottom-28 right-4 z-20 h-28 w-20 overflow-hidden rounded-2xl border border-white/20 bg-black shadow-2xl sm:bottom-32 sm:h-36 sm:w-24">
+              <video ref={localVideoRef} autoPlay muted playsInline className="h-full w-full object-cover" />
+            </div>
+          )}
+
+          <div className="relative z-10 mt-auto flex items-center justify-center px-6 pb-10 pt-6">
+            <div className="flex items-center justify-center gap-4 rounded-full bg-black/45 px-4 py-3 backdrop-blur">
+              {status === "idle" && (
+                <button
+                  type="button"
+                  onClick={beginCall}
+                  disabled={isBusy || !currentUserId}
+                  className={cn(
+                    "flex h-14 w-14 items-center justify-center rounded-full text-white shadow-lg transition",
+                    isBusy ? "bg-white/15" : "bg-emerald-500 hover:bg-emerald-600"
+                  )}
+                  aria-label="Start call"
+                >
+                  <PhoneCall className="h-6 w-6" />
+                </button>
+              )}
+
+              {status !== "idle" && (
+                <>
+                  <button
+                    type="button"
+                    onClick={toggleMic}
+                    className={cn(
+                      "flex h-12 w-12 items-center justify-center rounded-full text-white transition-colors",
+                      micEnabled ? "bg-white/15 hover:bg-white/25" : "bg-red-500 hover:bg-red-600"
+                    )}
+                    aria-label={micEnabled ? "Mute" : "Unmute"}
+                  >
+                    {micEnabled ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
+                  </button>
+                  {activeMode === "video" && (
+                    <button
+                      type="button"
+                      onClick={toggleCamera}
+                      disabled={!canToggleCamera}
+                      className={cn(
+                        "flex h-12 w-12 items-center justify-center rounded-full text-white transition-colors",
+                        cameraEnabled ? "bg-white/15 hover:bg-white/25" : "bg-slate-600 hover:bg-slate-700"
+                      )}
+                      aria-label={cameraEnabled ? "Camera off" : "Camera on"}
+                    >
+                      {cameraEnabled ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
+                    </button>
+                  )}
+                  {activeMode === "video" && (
+                    <button
+                      type="button"
+                      onClick={toggleScreenShare}
+                      className={cn(
+                        "flex h-12 w-12 items-center justify-center rounded-full text-white transition-colors",
+                        isScreenSharing ? "bg-ui-accent hover:brightness-110" : "bg-white/15 hover:bg-white/25"
+                      )}
+                      aria-label={isScreenSharing ? "Stop sharing" : "Share screen"}
+                    >
+                      {isScreenSharing ? <MonitorOff className="h-5 w-5" /> : <Monitor className="h-5 w-5" />}
+                    </button>
+                  )}
+                </>
+              )}
+
+              {status === "ringing" && hasIncomingCall && (
+                <>
+                  <button
+                    type="button"
+                    onClick={acceptIncomingCall}
+                    className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg hover:bg-emerald-600"
+                    aria-label="Accept"
+                  >
+                    <PhoneIncoming className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={rejectIncomingCall}
+                    className="flex h-12 w-12 items-center justify-center rounded-full bg-rose-500 text-white shadow-lg hover:bg-rose-600"
+                    aria-label="Reject"
+                  >
+                    <PhoneOff className="h-5 w-5" />
+                  </button>
+                </>
+              )}
+
+              {status !== "idle" && (
+                <button
+                  type="button"
+                  onClick={leaveCall}
+                  className="flex h-14 w-14 items-center justify-center rounded-full bg-red-500 text-white shadow-lg hover:bg-red-600"
+                  aria-label="End call"
+                >
+                  <PhoneOff className="h-6 w-6" />
+                </button>
+              )}
+            </div>
+          </div>
         </div>
-        <div className={panelClassName}>
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Remote stream</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                {isVideoMode ? "Remote camera appears here" : "Waiting for remote audio"}
+      ) : (
+        <section className={cn("mx-auto flex w-full flex-col gap-6 p-4 sm:p-8", showUserPanel ? "max-w-5xl" : "max-w-4xl")}>
+          {showHero && (
+            <div
+              className={cn(
+                "space-y-2",
+                isEnhanced &&
+                  "relative overflow-hidden rounded-[1.75rem] border border-slate-200/70 bg-white/90 px-5 py-5 shadow-[0_24px_80px_-40px_rgba(15,23,42,0.25)] dark:border-white/10 dark:bg-[#0b0f19]/75"
+              )}
+            >
+              {isEnhanced ? (
+                <>
+                  <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-gradient-to-br from-fuchsia-500/20 via-violet-500/15 to-orange-400/10 blur-2xl" />
+                  <div className="pointer-events-none absolute -left-14 -bottom-14 h-56 w-56 rounded-full bg-gradient-to-tr from-orange-400/12 via-pink-500/12 to-fuchsia-500/12 blur-3xl" />
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="badge mb-2 inline-flex border-slate-200 bg-white/80 text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-slate-200">
+                        {isVideoMode ? "Live video" : "Live voice"}
+                      </div>
+                      <h1 className="text-2xl font-bold tracking-tight text-slate-950 dark:text-slate-50 sm:text-3xl">
+                        {title}
+                      </h1>
+                      <p className="mt-2 max-w-2xl text-sm text-slate-600 dark:text-slate-200/80">{description}</p>
+                    </div>
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-slate-200/80 bg-white/80 text-slate-700 shadow-sm dark:border-white/10 dark:bg-white/5 dark:text-slate-200">
+                      <HeroIcon className="h-5 w-5" />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-50">{title}</h1>
+                  <p className="text-sm text-slate-600 dark:text-slate-300">{description}</p>
+                </>
+              )}
+            </div>
+          )}
+
+          {!canShowCallWorkspace ? (
+            <div className="card border-slate-200/70 bg-white/90 p-6 text-center shadow-xl shadow-slate-200/40 dark:border-white/10 dark:bg-[#0b0f19]/80">
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Select a user to start a call</p>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                Tap the <span className="font-semibold">phone</span> or <span className="font-semibold">video</span> button next to a user.
               </p>
             </div>
-            {isEnhanced && (
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-100/90 text-amber-700 dark:bg-navy-900/80 dark:text-sky-300">
-                {isVideoMode ? <Video className="h-4 w-4" /> : <Radio className="h-4 w-4" />}
-              </div>
-            )}
-          </div>
-          {/* FIX: keep audio element mounted so voice calls reliably play remote audio */}
-          <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
-          {activeMode === "video" ? (
-            <video
-              ref={remoteVideoRef}
-              autoPlay
-              playsInline
-              className={videoFrameClassName}
-            />
           ) : (
-            <div className={audioFrameClassName}>
-              <div className="space-y-3 text-center text-slate-100">
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-white/10 bg-white/5">
-                  <Radio className="h-7 w-7" />
+            <div className={cn("grid gap-5", showUserPanel ? "lg:grid-cols-[minmax(260px,340px)_minmax(0,1fr)]" : "grid-cols-1")}>
+              {showUserPanel ? (
+                <aside className="card overflow-hidden border-slate-200/70 bg-white/90 p-0 dark:border-white/10 dark:bg-[#0b0f19]/80">
+                  <div className="border-b border-slate-200/70 bg-white/70 px-4 py-3 dark:border-white/10 dark:bg-white/5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                        <Users className="h-4 w-4 shrink-0 text-slate-700 dark:text-sky-400" />
+                        Users
+                      </div>
+                    </div>
+                    <input
+                      value={userQuery}
+                      onChange={(event) => setUserQuery(event.target.value)}
+                      placeholder="Search username…"
+                      className={cn(fieldClassName, "mt-3")}
+                    />
+                  </div>
+
+                  <div className="max-h-[42vh] overflow-y-auto p-2 lg:max-h-none lg:flex-1">
+                    {userLoading ? (
+                      <div className="px-3 py-4 text-sm text-slate-600 dark:text-slate-300/80">Searching…</div>
+                    ) : userResults.length === 0 ? (
+                      <div className="px-3 py-4 text-sm text-slate-600 dark:text-slate-300/75">No users found.</div>
+                    ) : (
+                      <div className="space-y-1">
+                        {userResults.map((u) => {
+                          const selected = calleeId.trim() === u.id;
+                          return (
+                            <button
+                              key={u.id}
+                              type="button"
+                              className={cn(
+                                "flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left transition-colors",
+                                selected
+                                  ? "border-slate-300 bg-ui-chat-active text-ui-chat-active-fg shadow-md dark:border-white/10"
+                                  : "border-slate-200/70 bg-white/70 hover:bg-slate-50 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
+                              )}
+                              onClick={() => {
+                                setCalleeId(u.id);
+                                setCalleeUsername(u.username);
+                              }}
+                            >
+                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-200/80 text-xs font-bold text-slate-900 dark:bg-white/10 dark:text-slate-100">
+                                {(u.username || "?").slice(0, 1).toUpperCase()}
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                  {u.username}
+                                </span>
+                                <span className="block truncate font-mono text-[11px] opacity-60">{u.id.slice(0, 6)}…</span>
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="border-t border-slate-200/70 bg-white/70 px-4 py-3 text-xs dark:border-white/10 dark:bg-white/5 dark:text-slate-200">
+                    Selected: <span className="font-semibold">{calleeUsername || (calleeId ? "User selected" : "None")}</span>
+                  </div>
+                </aside>
+              ) : null}
+
+              <div className="min-w-0">
+                <div
+                  className={cn(
+                    "flex flex-wrap gap-3",
+                    isEnhanced &&
+                      "rounded-[1.5rem] border border-slate-200/70 bg-white/80 p-3 shadow-lg shadow-slate-200/30 dark:border-white/10 dark:bg-white/[0.04]"
+                  )}
+                >
+                  <Button
+                    type="button"
+                    onClick={beginCall}
+                    disabled={isBusy || !currentUserId}
+                    className={cn(
+                      isEnhanced &&
+                        "rounded-full px-5 bg-gradient-to-r from-fuchsia-600 via-violet-600 to-orange-500 text-white hover:brightness-110"
+                    )}
+                  >
+                    <PhoneCall className="mr-2 h-4 w-4" />
+                    {isBusy ? "Connecting..." : "Start call"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={acceptIncomingCall}
+                    disabled={isBusy || !hasIncomingCall}
+                    className={cn(isEnhanced && "rounded-full px-5")}
+                  >
+                    <PhoneIncoming className="mr-2 h-4 w-4" />
+                    Accept
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={rejectIncomingCall}
+                    disabled={isBusy || !hasIncomingCall}
+                    className={cn(isEnhanced && "rounded-full px-5")}
+                  >
+                    <PhoneOff className="mr-2 h-4 w-4" />
+                    Reject
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={leaveCall}
+                    disabled={!peerId && !hasIncomingCall}
+                    className={cn(isEnhanced && "rounded-full px-5")}
+                  >
+                    <Phone className="mr-2 h-4 w-4" />
+                    End
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={toggleMic}
+                    disabled={!localStreamRef.current}
+                    className={cn(isEnhanced && "rounded-full px-5")}
+                  >
+                    {micEnabled ? <Mic className="mr-2 h-4 w-4" /> : <MicOff className="mr-2 h-4 w-4" />}
+                    {micEnabled ? "Mute mic" : "Unmute mic"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={toggleCamera}
+                    disabled={!canToggleCamera}
+                    className={cn(isEnhanced && "rounded-full px-5")}
+                  >
+                    {cameraEnabled ? (
+                      <>
+                        <VideoOff className="mr-2 h-4 w-4" />
+                        Camera off
+                      </>
+                    ) : (
+                      <>
+                        <Video className="mr-2 h-4 w-4" />
+                        Camera on
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={toggleScreenShare}
+                    disabled={status !== "connected" || !isVideoMode}
+                    className={cn(
+                      isEnhanced && "rounded-full px-5",
+                      isScreenSharing && "border-ui-accent/35 bg-ui-accent-subtle text-ui-accent-text dark:text-ui-accent-text"
+                    )}
+                  >
+                    {isScreenSharing ? <MonitorOff className="mr-2 h-4 w-4" /> : <Monitor className="mr-2 h-4 w-4" />}
+                    {isScreenSharing ? "Stop share" : "Share screen"}
+                  </Button>
+                  {status === "connected" && (
+                    <div
+                      className={cn(
+                        "flex items-center gap-2 rounded-full border border-emerald-200/70 bg-emerald-50/70 px-4 py-2 text-sm font-semibold text-emerald-700 dark:border-emerald-700/40 dark:bg-emerald-900/20 dark:text-emerald-300",
+                        isEnhanced && "rounded-full"
+                      )}
+                    >
+                      <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+                      {formatDuration(callDuration)}
+                    </div>
+                  )}
                 </div>
-                <div className="text-sm font-medium">Waiting for remote audio</div>
+
+                <div className={panelClassName}>
+                  {isEnhanced && (
+                    <div className="pointer-events-none absolute right-0 top-0 h-20 w-20 rounded-full bg-fuchsia-500/10 blur-2xl" />
+                  )}
+                  <div className="grid gap-3 sm:grid-cols-4">
+                    <div className="rounded-2xl border border-slate-200/70 bg-slate-50/70 px-4 py-3 dark:border-white/10 dark:bg-white/[0.03]">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                        Status
+                      </div>
+                      <div className={cn("mt-1 text-sm font-semibold", statusToneClass)}>{getStatusLabel(status)}</div>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200/70 bg-slate-50/70 px-4 py-3 dark:border-white/10 dark:bg-white/[0.03]">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                        Connection
+                      </div>
+                      <div className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-50">{connectionState}</div>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200/70 bg-slate-50/70 px-4 py-3 dark:border-white/10 dark:bg-white/[0.03]">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                        Mode
+                      </div>
+                      <div className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-50">
+                        {activeMode === "video" ? "Video" : "Voice"}
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200/70 bg-slate-50/70 px-4 py-3 dark:border-white/10 dark:bg-white/[0.03]">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                        Peer
+                      </div>
+                      <div className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-50">
+                        {peerDisplayName || incomingOffer?.fromUserId || peerId || "Waiting"}
+                      </div>
+                    </div>
+                  </div>
+                  {error ? <p className="mt-4 text-sm text-rose-600 dark:text-rose-400">{error}</p> : null}
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className={panelClassName}>
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Local stream</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {isVideoMode ? "Your camera preview" : "Your microphone is live"}
+                        </p>
+                      </div>
+                      {isEnhanced && (
+                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-100/90 text-amber-700 dark:bg-navy-900/80 dark:text-sky-300">
+                          {isVideoMode ? <UserRound className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                        </div>
+                      )}
+                    </div>
+                    {activeMode === "video" ? (
+                      <video ref={localVideoRef} autoPlay muted playsInline className={videoFrameClassName} />
+                    ) : (
+                      <div className={audioFrameClassName}>
+                        <div className="space-y-3 text-center">
+                          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-white/10 bg-white/5">
+                            <Mic className="h-7 w-7" />
+                          </div>
+                          <div className="text-sm font-medium text-slate-100">Microphone active for voice call</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className={panelClassName}>
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Remote stream</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {isVideoMode ? "Remote camera appears here" : "Waiting for remote audio"}
+                        </p>
+                      </div>
+                      {isEnhanced && (
+                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-100/90 text-amber-700 dark:bg-navy-900/80 dark:text-sky-300">
+                          {isVideoMode ? <Video className="h-4 w-4" /> : <Radio className="h-4 w-4" />}
+                        </div>
+                      )}
+                    </div>
+                    <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
+                    {activeMode === "video" ? (
+                      <video ref={remoteVideoRef} autoPlay playsInline className={videoFrameClassName} />
+                    ) : (
+                      <div className={audioFrameClassName}>
+                        <div className="space-y-3 text-center text-slate-100">
+                          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-white/10 bg-white/5">
+                            <Radio className="h-7 w-7" />
+                          </div>
+                          <div className="text-sm font-medium">Waiting for remote audio</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           )}
-        </div>
-      </div>
-        </div>
-      </div>
-    </section>
+        </section>
+      )}
     </>
   );
 }
+

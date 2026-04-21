@@ -1505,15 +1505,26 @@ export default function ChatDashboardPage() {
                       const selected = activeUserId.trim() === chat.peerId;
                       const unread = Number(chat.unreadCount || 0);
                       return (
-                        <button
+                        <div
                           key={chat.threadId}
-                          type="button"
+                          role="button"
+                          tabIndex={0}
                           onClick={() => {
                             if (chat.locked) {
                               setActionError('Chat is locked. Right click to unlock.');
                               return;
                             }
                             pickPeer(chat.peerId, chat.peerUsername);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              if (chat.locked) {
+                                setActionError('Chat is locked. Right click to unlock.');
+                                return;
+                              }
+                              pickPeer(chat.peerId, chat.peerUsername);
+                            }
                           }}
                           onContextMenu={(e) => {
                             e.preventDefault();
@@ -1524,7 +1535,7 @@ export default function ChatDashboardPage() {
                             });
                           }}
                           className={cn(
-                            'flex w-full gap-3 rounded-2xl border border-transparent px-3 py-2.5 text-left transition',
+                            'flex w-full cursor-pointer gap-3 rounded-2xl border border-transparent px-3 py-2.5 text-left transition outline-none focus-visible:ring-2 focus-visible:ring-[var(--ui-focus)]',
                             selected
                               ? 'bg-ui-chat-active text-ui-chat-active-fg shadow-md'
                               : 'text-slate-800 hover:border-ui-border hover:bg-ui-panel dark:text-slate-100 dark:hover:bg-ui-muted'
@@ -1585,7 +1596,7 @@ export default function ChatDashboardPage() {
                               ) : null}
                             </div>
                           </div>
-                        </button>
+                        </div>
                       );
                     })
                   )}
@@ -1758,16 +1769,16 @@ export default function ChatDashboardPage() {
                 <div className="flex shrink-0 items-center gap-1.5">
                   {activeUserId.trim() && user?.id ? (
                     <>
-                    <button
-                      type="button"
-                      className="hidden h-9 w-9 cursor-not-allowed items-center justify-center rounded-xl text-slate-400 opacity-50 sm:flex dark:text-slate-500"
-                      title="Screen share — use call page"
-                      disabled
+                    <Link
+                      href={`/call?callee=${encodeURIComponent(activeUserId.trim())}&mode=video&ready=1&share=1`}
+                      className="hidden h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-ui-muted hover:text-ui-accent sm:flex dark:text-slate-400"
+                      title="Screen share"
+                      aria-label="Screen share"
                     >
                       <Monitor className="h-4 w-4" />
-                    </button>
+                    </Link>
                     <Link
-                      href={`/call?callee=${encodeURIComponent(activeUserId.trim())}`}
+                      href={`/call?callee=${encodeURIComponent(activeUserId.trim())}&mode=audio&ready=1`}
                       className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-ui-muted hover:text-ui-accent dark:text-slate-400"
                       title="Voice call"
                       aria-label="Voice call"
@@ -1775,7 +1786,7 @@ export default function ChatDashboardPage() {
                       <Phone className="h-4 w-4" />
                     </Link>
                     <Link
-                      href={`/video-call?callee=${encodeURIComponent(activeUserId.trim())}`}
+                      href={`/call?callee=${encodeURIComponent(activeUserId.trim())}&mode=video&ready=1`}
                       className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-ui-muted hover:text-ui-accent dark:text-slate-400"
                       title="Video call"
                       aria-label="Video call"

@@ -933,12 +933,22 @@ export default function GroupChatPage() {
     }
   };
 
+  const groupSubtitle = useMemo(() => {
+    const memberCount = groupMembers.length;
+    if (!groupId.trim()) return 'Create or open a group to start chatting.';
+    if (!memberCount) return 'No members yet';
+    // We don't track presence for group members yet; show a soft "online" approximation.
+    const approxOnline = Math.max(1, Math.min(memberCount, Math.ceil(memberCount * 0.4)));
+    return `${memberCount} members, ${approxOnline} online`;
+  }, [groupId, groupMembers.length]);
+
   return (
     <>
       <ChatAppShell
         topBar={<ChatAppTopBar />}
-        gridClassName="grid-cols-1 lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)]"
+        gridClassName="grid-cols-1 lg:grid-cols-[minmax(280px,340px)_minmax(0,1fr)] xl:grid-cols-[minmax(280px,340px)_minmax(0,1fr)_minmax(320px,360px)]"
       >
+        {/* Left: group list */}
         <aside className="flex max-h-[42vh] min-h-0 flex-col border-b border-ui-border bg-ui-sidebar lg:max-h-none lg:border-b-0 lg:border-r">
           <div className="shrink-0 border-b border-ui-border">
             <ChatAppIconRail active="groups" dmUnreadCount={dmUnreadTotal} />
@@ -949,7 +959,7 @@ export default function GroupChatPage() {
             className="relative shrink-0 border-b border-ui-border px-3 pb-3 pt-2"
           >
             <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-base font-bold tracking-tight text-slate-900 dark:text-slate-100">Your groups</h2>
+              <h2 className="text-base font-bold tracking-tight text-slate-900 dark:text-slate-100">Groups</h2>
               <div className="flex items-center gap-2">
                 <Button
                   type="button"
@@ -1129,9 +1139,10 @@ export default function GroupChatPage() {
 
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-2 pb-3 pt-1 sm:px-3">
             {groupId.trim() ? (
-              <div className="rounded-xl border border-ui-border bg-ui-muted px-3 py-2 text-sm font-medium text-slate-900 dark:text-slate-100">
-                <div>Current group</div>
-                <div className="font-mono text-xs opacity-80">{groupId.trim()}</div>
+              <div className="rounded-2xl border border-ui-border bg-ui-panel/70 px-3 py-2.5">
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Current</p>
+                <p className="mt-1 truncate text-sm font-bold text-slate-900 dark:text-slate-100">{groupId.trim()}</p>
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{groupSubtitle}</p>
               </div>
             ) : (
               <p className="text-xs text-slate-500 dark:text-slate-400">Create a group, then add members.</p>
@@ -1170,69 +1181,47 @@ export default function GroupChatPage() {
                         setGroupInput(group.id);
                       }}
                       className={cn(
-                        'w-full rounded-2xl border border-transparent px-2.5 py-2 text-left text-xs font-medium transition',
+                        'w-full rounded-2xl border border-transparent px-2.5 py-2 text-left transition',
                         groupId.trim() === group.id
                           ? 'bg-ui-chat-active text-ui-chat-active-fg shadow-md'
                           : 'border-ui-border bg-ui-panel/70 text-slate-800 hover:bg-ui-muted dark:text-slate-100',
                       )}
                     >
-                      <div>Group {group.id}</div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-ui-border bg-ui-muted">
+                          {group.photoUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={group.photoUrl} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            <Users className="h-5 w-5 text-slate-500 dark:text-slate-300" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-semibold leading-5">
+                            {String(group?.name || '').trim() ? group.name : `Group ${group.id}`}
+                          </div>
+                          <div
+                            className={cn(
+                              'truncate text-xs',
+                              groupId.trim() === group.id ? 'text-[var(--ui-chat-active-muted)]' : 'opacity-80',
+                            )}
+                          >
+                            {group.memberCount} members
+                          </div>
+                        </div>
+                        <div className={cn('text-xs', groupId.trim() === group.id ? 'opacity-90' : 'opacity-60')}>
+                          {group?.updatedAt ? formatGroupMessageTime(new Date(group.updatedAt).getTime()) : ''}
+                        </div>
+                      </div>
                       <div
                         className={cn(
                           'text-[11px]',
                           groupId.trim() === group.id ? 'text-[var(--ui-chat-active-muted)]' : 'opacity-80',
                         )}
                       >
-                        {group.memberCount} members
+                        {/* reserved for last message preview */}
                       </div>
                     </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div>
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                Members
-              </p>
-              {membersLoadError && (
-                <div className="mb-2 rounded-lg border border-red-400/40 bg-red-500/10 px-2 py-1.5 text-xs text-red-700 dark:text-red-300">
-                  <p>{membersLoadError}</p>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    className="mt-1 h-7 px-2 text-[11px]"
-                    onClick={() => setMembersRefreshTick((value) => value + 1)}
-                  >
-                    Retry
-                  </Button>
-                </div>
-              )}
-              {membersLoading ? (
-                <p className="text-xs text-slate-700/75 dark:text-slate-300/85">Loading members…</p>
-              ) : groupMembers.length === 0 ? (
-                <p className="text-xs text-slate-700/75 dark:text-slate-300/85">No members.</p>
-              ) : (
-                <div className="space-y-1.5">
-                  {groupMembers.map((member, idx) => (
-                    <div
-                      key={String(member?.id || member?.userId || member?.uid || member?.username || `member-${idx}`)}
-                      className={cn(
-                        'rounded-lg border border-ui-border bg-ui-panel/70 px-2.5 py-1.5 text-xs transition-colors duration-300',
-                        recentlyAddedMemberId === member.id &&
-                          'border-emerald-300 bg-emerald-50/80 animate-pulse dark:border-emerald-500/40 dark:bg-emerald-900/20'
-                      )}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="font-medium text-slate-800 dark:text-slate-100">{getMemberLabel(member)}</div>
-                        {recentlyAddedMemberId === member.id && (
-                          <span className="rounded-full bg-emerald-600/90 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
-                            New
-                          </span>
-                        )}
-                      </div>
-                    </div>
                   ))}
                 </div>
               )}
@@ -1240,6 +1229,7 @@ export default function GroupChatPage() {
           </div>
         </aside>
 
+        {/* Center: messages */}
         <section className="flex min-h-0 flex-1 flex-col overflow-hidden border-b border-ui-border bg-ui-panel lg:border-b-0">
           <div className="shrink-0 border-b border-ui-border px-4 py-3">
             <div className="flex items-start justify-between gap-3">
@@ -1250,11 +1240,7 @@ export default function GroupChatPage() {
                     {groupId.trim() ? groupId.trim() : 'Group chat'}
                   </h2>
                 </div>
-                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                  {messages.length} messages
-                  {groupId.trim() ? ` · ${groupMembers.length} members` : ''}
-                  {groupMuted ? ' · muted' : ''}
-                </p>
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{groupId.trim() ? groupSubtitle : 'Open a group to start chatting.'}{groupMuted ? ' · muted' : ''}</p>
               </div>
               <div className="flex shrink-0 items-center gap-1">
                 <input
@@ -1500,6 +1486,116 @@ export default function GroupChatPage() {
             </div>
           )}
         </section>
+
+        {/* Right: group info + members (desktop) */}
+        <aside className="hidden min-h-0 flex-col border-l border-ui-border bg-ui-sidebar xl:flex">
+          <div className="shrink-0 border-b border-ui-border px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-bold text-slate-900 dark:text-slate-50">Group Info</p>
+              <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={handleShowMembers} disabled={!groupId.trim()}>
+                <Users className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="mt-3 flex items-center gap-3">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-ui-border bg-ui-muted">
+                {groupPhotoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={groupPhotoUrl} alt="Group" className="h-full w-full object-cover" />
+                ) : (
+                  <Users className="h-5 w-5 text-slate-500 dark:text-slate-300" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  {groupId.trim() ? groupId.trim() : 'No group selected'}
+                </p>
+                <p className="truncate text-xs text-slate-500 dark:text-slate-400">{groupSubtitle}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+            <div className="rounded-2xl border border-ui-border bg-ui-panel/70 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Files</p>
+              <div className="mt-3 space-y-2 text-sm">
+                {[
+                  { label: 'Photos', value: 0 },
+                  { label: 'Videos', value: 0 },
+                  { label: 'Files', value: 0 },
+                  { label: 'Audio', value: 0 },
+                  { label: 'Links', value: 0 },
+                  { label: 'Voice messages', value: 0 },
+                ].map((row) => (
+                  <div key={row.label} className="flex items-center justify-between rounded-xl border border-ui-border bg-ui-muted px-3 py-2">
+                    <span className="text-slate-700 dark:text-slate-200">{row.label}</span>
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">{row.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Members
+                </p>
+                <Button type="button" size="sm" variant="secondary" className="h-7 px-2 text-[11px]" onClick={() => setMembersModalOpen(true)} disabled={!groupId.trim()}>
+                  View all
+                </Button>
+              </div>
+              {membersLoadError && (
+                <div className="mb-2 rounded-lg border border-red-400/40 bg-red-500/10 px-2 py-1.5 text-xs text-red-700 dark:text-red-300">
+                  <p>{membersLoadError}</p>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="mt-1 h-7 px-2 text-[11px]"
+                    onClick={() => setMembersRefreshTick((value) => value + 1)}
+                  >
+                    Retry
+                  </Button>
+                </div>
+              )}
+              {membersLoading ? (
+                <p className="text-xs text-slate-700/75 dark:text-slate-300/85">Loading members…</p>
+              ) : groupMembers.length === 0 ? (
+                <p className="text-xs text-slate-700/75 dark:text-slate-300/85">No members.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {groupMembers.slice(0, 12).map((member, idx) => (
+                    <div
+                      key={String(member?.id || member?.userId || member?.uid || member?.username || `member-right-${idx}`)}
+                      className={cn(
+                        'flex items-center gap-3 rounded-2xl border border-ui-border bg-ui-panel/70 px-3 py-2 text-xs',
+                        recentlyAddedMemberId === member.id &&
+                          'border-emerald-300 bg-emerald-50/80 animate-pulse dark:border-emerald-500/40 dark:bg-emerald-900/20'
+                      )}
+                    >
+                      <Image
+                        src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(getMemberLabel(member) || member.id)}`}
+                        alt=""
+                        width={32}
+                        height={32}
+                        unoptimized
+                        className="h-8 w-8 rounded-full border border-ui-border object-cover"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{getMemberLabel(member)}</p>
+                        <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">{member.role === 'admin' ? 'admin' : 'member'}</p>
+                      </div>
+                      {recentlyAddedMemberId === member.id && (
+                        <span className="rounded-full bg-emerald-600/90 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                          New
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </aside>
       </ChatAppShell>
 
       {membersModalOpen && (
