@@ -595,7 +595,7 @@ export default function CallUI({
         peerName: peerDisplayName || undefined,
         mode: incomingOffer.mode,
         direction: "incoming",
-        outcome: "connecting",
+        outcome: "ringing",
         startedAt: Date.now(),
       });
       const peerConnection = setupPeerConnection(currentUserId, callerId);
