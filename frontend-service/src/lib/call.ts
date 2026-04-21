@@ -9,6 +9,19 @@ type CallSocket = Socket
 let socketInstance: CallSocket | null = null
 let callSocketKey: string | null = null
 
+function jwtClaimsUserId(token: string): string | null {
+  try {
+    const parts = String(token || '').split('.')
+    if (parts.length < 2) return null
+    const payload = parts[1]
+    const json = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')))
+    const uid = json?.id ?? json?.sub ?? json?.user_id ?? json?.userId
+    return uid ? String(uid).trim() : null
+  } catch {
+    return null
+  }
+}
+
 async function ensureCallSocket(userId: string): Promise<CallSocket> {
   const snap = await getCurrentAuthSnapshot().catch(() => null)
   const token = String(snap?.token || '')
@@ -31,10 +44,22 @@ async function ensureCallSocket(userId: string): Promise<CallSocket> {
 
   callSocketKey = key
   const auth: Record<string, string> = { userId }
-  if (token) auth.token = token
+  // Socket server accepts unauthenticated sockets, but rejects mismatched tokens.
+  // Some auth providers rotate tokens; if the token does not belong to this userId,
+  // omit it so calls still work.
+  if (token) {
+    const tokenUid = jwtClaimsUserId(token)
+    if (!tokenUid || tokenUid === String(userId)) {
+      auth.token = token
+    }
+  }
 
   await waitForDomReady()
   socketInstance = io(CALL_SOCKET_URL, createSocketIoClientOptions(auth))
+  socketInstance.on('socket_error', (e: any) => {
+    // eslint-disable-next-line no-console
+    console.warn('[call-socket] server error', e)
+  })
   return socketInstance
 }
 
