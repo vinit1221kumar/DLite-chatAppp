@@ -1062,7 +1062,8 @@ async def get_messages(chat_id: str, authorization: Optional[str] = Header(defau
         "select": "id,chat_id,sender_id,content,type,is_deleted,deleted_at,deleted_by,created_at",
         "chat_id": f"eq.{chat_id}",
         "order": "created_at.asc",
-        "limit": "200",
+        # Increase history depth so older messages are available without pagination.
+        "limit": "800",
     }
     headers = {"apikey": postgrest_headers(use_service_role=False).get("apikey", ""), "authorization": f"Bearer {access_token}"}
     try:

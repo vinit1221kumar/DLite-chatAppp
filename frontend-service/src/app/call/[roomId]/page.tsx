@@ -39,6 +39,7 @@ export default function ZegoCallRoomPage() {
   >("idle");
   const [error, setError] = useState<string>("");
   const [remoteJoined, setRemoteJoined] = useState(false);
+  const [needsUserGesture, setNeedsUserGesture] = useState(false);
 
   const server = useMemo(() => "wss://webliveroom-api.zego.im/ws", []);
 
@@ -100,6 +101,7 @@ export default function ZegoCallRoomPage() {
       try {
         setError("");
         setRemoteJoined(false);
+        setNeedsUserGesture(false);
         setStatus("getting_token");
 
         const tokenRes = await fetch("/api/token", {
@@ -120,29 +122,54 @@ export default function ZegoCallRoomPage() {
         const zg = new ZegoExpressEngine(appId, server);
         engineRef.current = zg;
 
-        // Room stream updates: play the first remote stream we see.
+        // Some browsers require an explicit user gesture to start audio.
+        try {
+          const r = await (zg as unknown as { resumeAudioContext?: () => Promise<boolean> | boolean }).resumeAudioContext?.();
+          if (r === false) setNeedsUserGesture(true);
+        } catch {
+          // ignore
+        }
+
+        // Room stream updates: play remote streams.
         const onRoomStreamUpdate = async (_roomID: string, updateType: "ADD" | "DELETE", streamList: any[]) => {
           if (cancelled) return;
           if (!Array.isArray(streamList) || streamList.length === 0) return;
-          if (updateType !== "ADD") return;
+          if (updateType === "DELETE") {
+            // If the currently playing stream disappears, stop it and go back to waiting.
+            const deletedIds = streamList
+              .map((s) => String(s?.streamID || s?.streamId || "").trim())
+              .filter(Boolean);
+            if (playingStreamIdRef.current && deletedIds.includes(playingStreamIdRef.current)) {
+              try {
+                zg.stopPlayingStream(playingStreamIdRef.current);
+              } catch {
+                /* ignore */
+              }
+              playingStreamIdRef.current = "";
+              setRemoteJoined(false);
+              setStatus("waiting_remote");
+            }
+            return;
+          }
 
-          const remoteStreamId = String(streamList[0]?.streamID || streamList[0]?.streamId || "").trim();
-          if (!remoteStreamId) return;
-
-          // Don't play our own published stream.
-          if (remoteStreamId === publishedStreamIdRef.current) return;
-          if (playingStreamIdRef.current === remoteStreamId) return;
-
-          try {
-            const remoteStream = await zg.startPlayingStream(remoteStreamId);
-            const remoteView = zg.createRemoteStreamView(remoteStream);
-            const mountId = "dlite-zego-remote";
-            remoteView.play(mountId);
-            playingStreamIdRef.current = remoteStreamId;
-            setRemoteJoined(true);
-            setStatus("connected");
-          } catch (e) {
-            // keep waiting; user can refresh if needed
+          // ADD: play the first remote stream that isn't ours.
+          for (const s of streamList) {
+            const remoteStreamId = String(s?.streamID || s?.streamId || "").trim();
+            if (!remoteStreamId) continue;
+            if (remoteStreamId === publishedStreamIdRef.current) continue;
+            if (playingStreamIdRef.current === remoteStreamId) continue;
+            try {
+              const remoteStream = await zg.startPlayingStream(remoteStreamId);
+              const remoteView = zg.createRemoteStreamView(remoteStream);
+              const mountId = "dlite-zego-remote";
+              remoteView.play(mountId);
+              playingStreamIdRef.current = remoteStreamId;
+              setRemoteJoined(true);
+              setStatus("connected");
+              break;
+            } catch {
+              // keep trying the next stream
+            }
           }
         };
 
@@ -174,6 +201,28 @@ export default function ZegoCallRoomPage() {
 
         zg.on("roomStreamUpdate", onRoomStreamUpdate);
         zg.on("roomStateChanged", onRoomStateChanged);
+
+        // Extra hooks (best-effort; depends on SDK build).
+        try {
+          (zg as unknown as { on?: (event: string, cb: (...args: unknown[]) => void) => void }).on?.(
+            "playerStateUpdate",
+            (_roomID: string, streamID: string, state: { errorCode?: number } | undefined) => {
+            if (cancelled) return;
+            const code = Number(state?.errorCode || 0);
+            if (code) setError(`Play failed (${streamID}): code ${code}`);
+            }
+          );
+          (zg as unknown as { on?: (event: string, cb: (...args: unknown[]) => void) => void }).on?.(
+            "publisherStateUpdate",
+            (_roomID: string, streamID: string, state: { errorCode?: number } | undefined) => {
+            if (cancelled) return;
+            const code = Number(state?.errorCode || 0);
+            if (code) setError(`Publish failed (${streamID}): code ${code}`);
+            }
+          );
+        } catch {
+          /* ignore */
+        }
 
         setStatus("logging_in");
         const ok = await zg.loginRoom(roomId, token, { userID: userId, userName }, { userUpdate: true });
@@ -240,6 +289,27 @@ export default function ZegoCallRoomPage() {
           </div>
         </div>
         {error ? <p className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700">{error}</p> : null}
+        {needsUserGesture ? (
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-ui-border bg-ui-muted px-3 py-2">
+            <p className="text-xs text-slate-600 dark:text-slate-300">
+              Browser blocked audio autoplay. Click to enable audio.
+            </p>
+            <button
+              type="button"
+              className="rounded-full bg-gradient-to-r from-ui-grad-from to-ui-grad-to px-3 py-1 text-[11px] font-semibold text-white shadow-sm hover:brightness-110"
+              onClick={async () => {
+                try {
+                  await (engineRef.current as unknown as { resumeAudioContext?: () => Promise<boolean> | boolean })?.resumeAudioContext?.();
+                  setNeedsUserGesture(false);
+                } catch {
+                  /* ignore */
+                }
+              }}
+            >
+              Enable
+            </button>
+          </div>
+        ) : null}
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
