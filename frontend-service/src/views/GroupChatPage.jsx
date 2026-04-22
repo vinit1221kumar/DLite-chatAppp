@@ -23,6 +23,7 @@ import {
   setGroupMemberRole,
   setGroupMuted,
   subscribeGroupMessages,
+  subscribeGroupDeleted,
   toggleGroupReaction,
   setGroupTyping,
   subscribeGroupTyping,
@@ -349,6 +350,31 @@ export default function GroupChatPage() {
     }
     return () => unsubscribe();
   }, [user?.id]);
+
+  useEffect(() => {
+    let unsubscribe = () => undefined;
+    try {
+      unsubscribe = subscribeGroupDeleted((payload) => {
+        const deletedGroupId = String(payload?.groupId || '').trim();
+        if (!deletedGroupId) return;
+        setGroupList((prev) => prev.filter((group) => group.id !== deletedGroupId));
+        if (deletedGroupId === groupId.trim()) {
+          setPanelSuccess('Group deleted.');
+          setGroupId('');
+          setGroupInput('');
+          setMessages([]);
+          setGroupMembers([]);
+          setGroupMenuOpen(false);
+          setMembersModalOpen(false);
+          setGroupPhotoUrl('');
+        }
+        loadUserGroups();
+      });
+    } catch {
+      /* ignore */
+    }
+    return () => unsubscribe();
+  }, [groupId, loadUserGroups]);
 
   const getMemberLabel = useCallback((member) => {
     if (member.id === user?.id) {
@@ -843,7 +869,7 @@ export default function GroupChatPage() {
     setPanelError('');
     setPanelSuccess('');
     try {
-      await deleteGroup({ groupId: groupId.trim() });
+      await deleteGroup({ groupId: groupId.trim(), memberIds: groupMembers.map((member) => member.id) });
       setPanelSuccess('Group deleted.');
       setGroupId('');
       setGroupInput('');

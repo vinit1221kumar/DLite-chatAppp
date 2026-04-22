@@ -255,6 +255,21 @@ def create_socket_app(*, cors_allowed_origins: list[str] | str, other_asgi_app=N
         await sio.emit("message_deleted", {"chatId": chat_id, "messageId": message_id}, room=chat_room(chat_id))
 
     @sio.event
+    async def group_deleted(sid, data):
+        session = await sio.get_session(sid)
+        user_id = (session or {}).get("userId")
+        if not user_id:
+            return
+        group_id = str((data or {}).get("groupId") or (data or {}).get("chatId") or "").strip()
+        member_ids = [str(uid or "").strip() for uid in ((data or {}).get("memberIds") or [])]
+        member_ids = [uid for uid in member_ids if uid]
+        if not group_id or not member_ids:
+            return
+        payload = {"groupId": group_id}
+        for mid in sorted(set(member_ids)):
+            await sio.emit("group_deleted", payload, room=user_room(mid))
+
+    @sio.event
     async def reaction_updated(sid, data):
         session = await sio.get_session(sid)
         user_id = (session or {}).get("userId")

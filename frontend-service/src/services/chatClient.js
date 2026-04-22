@@ -749,6 +749,7 @@ export async function deleteGroup() {
   const snapshot = await getCurrentAuthSnapshot()
   if (!snapshot?.token) throw new Error('Not authenticated')
   const groupId = String(arguments?.[0]?.groupId || arguments?.[0] || '').trim()
+  const memberIds = Array.isArray(arguments?.[0]?.memberIds) ? arguments[0].memberIds.map((id) => String(id || '').trim()).filter(Boolean) : []
   if (!groupId) throw new Error('groupId is required')
   const res = await fetch(`${API_BASE_URL}/chat/groups/${encodeURIComponent(groupId)}`, {
     method: 'DELETE',
@@ -756,7 +757,51 @@ export async function deleteGroup() {
   })
   const json = await res.json().catch(() => ({}))
   if (!res.ok || json?.success === false) throw new Error(json?.message || 'Could not delete group')
+  try {
+    const uid = String(snapshot?.user?.id || snapshot?.user?.uid || '').trim()
+    if (uid) {
+      const s = await getSocket({ userId: uid })
+      s.emit('group_deleted', { groupId, memberIds })
+    }
+  } catch {
+    /* best-effort */
+  }
   return json
+}
+
+export function subscribeGroupDeleted() {
+  const cb = typeof arguments?.[0] === 'function' ? arguments[0] : () => undefined
+  let disposed = false
+  let detach = () => undefined
+
+  ;(async () => {
+    const snapshot = await getCurrentAuthSnapshot().catch(() => null)
+    const uid = String(snapshot?.user?.id || snapshot?.user?.uid || '').trim()
+    if (!snapshot?.token || !uid) return
+    let s
+    try {
+      s = await getSocket({ userId: uid })
+    } catch {
+      return
+    }
+    const handler = (payload) => {
+      if (disposed) return
+      cb(payload || {})
+    }
+    s.on('group_deleted', handler)
+    detach = () => {
+      try {
+        s.off('group_deleted', handler)
+      } catch {
+        /* ignore */
+      }
+    }
+  })()
+
+  return () => {
+    disposed = true
+    detach()
+  }
 }
 export async function addGroupMemberByUsername() {
   const snapshot = await getCurrentAuthSnapshot()
