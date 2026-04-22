@@ -351,31 +351,6 @@ export default function GroupChatPage() {
     return () => unsubscribe();
   }, [user?.id]);
 
-  useEffect(() => {
-    let unsubscribe = () => undefined;
-    try {
-      unsubscribe = subscribeGroupDeleted((payload) => {
-        const deletedGroupId = String(payload?.groupId || '').trim();
-        if (!deletedGroupId) return;
-        setGroupList((prev) => prev.filter((group) => group.id !== deletedGroupId));
-        if (deletedGroupId === groupId.trim()) {
-          setPanelSuccess('Group deleted.');
-          setGroupId('');
-          setGroupInput('');
-          setMessages([]);
-          setGroupMembers([]);
-          setGroupMenuOpen(false);
-          setMembersModalOpen(false);
-          setGroupPhotoUrl('');
-        }
-        loadUserGroups();
-      });
-    } catch {
-      /* ignore */
-    }
-    return () => unsubscribe();
-  }, [groupId, loadUserGroups]);
-
   const getMemberLabel = useCallback((member) => {
     if (member.id === user?.id) {
       return user?.username || 'You';
@@ -691,6 +666,31 @@ export default function GroupChatPage() {
   useEffect(() => {
     loadUserGroups();
   }, [loadUserGroups, groupsRefreshTick]);
+
+  useEffect(() => {
+    let unsubscribe = () => undefined;
+    try {
+      unsubscribe = subscribeGroupDeleted((payload) => {
+        const deletedGroupId = String(payload?.groupId || '').trim();
+        if (!deletedGroupId) return;
+        setGroupList((prev) => prev.filter((group) => group.id !== deletedGroupId));
+        if (deletedGroupId === groupId.trim()) {
+          setPanelSuccess('Group deleted.');
+          setGroupId('');
+          setGroupInput('');
+          setMessages([]);
+          setGroupMembers([]);
+          setGroupMenuOpen(false);
+          setMembersModalOpen(false);
+          setGroupPhotoUrl('');
+        }
+        loadUserGroups();
+      });
+    } catch {
+      /* ignore */
+    }
+    return () => unsubscribe();
+  }, [groupId, loadUserGroups]);
 
   useEffect(() => {
     loadGroupMembers(groupId);
