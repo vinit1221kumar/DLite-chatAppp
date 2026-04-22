@@ -656,6 +656,27 @@ export async function sendGroupMessage() {
   })
   const json = await res.json().catch(() => ({}))
   if (!res.ok || json?.success === false) throw new Error(json?.message || 'Could not send')
+
+  // Best-effort realtime broadcast so open group chats update immediately without refresh.
+  try {
+    const uid = String(snapshot?.user?.id || snapshot?.user?.uid || '').trim()
+    if (uid) {
+      const s = await getSocket({ userId: uid })
+      const saved = json?.message || {}
+      s.emit('join_chat', { chatId })
+      s.emit('send_message', {
+        chatId,
+        senderId: uid,
+        content: String(saved.content || content),
+        type: String(saved.type || type || 'text'),
+        _id: saved.id || undefined,
+        createdAt: saved.created_at ? Date.parse(saved.created_at) : Date.now(),
+      })
+    }
+  } catch {
+    /* best-effort */
+  }
+
   return json?.message
 }
 
