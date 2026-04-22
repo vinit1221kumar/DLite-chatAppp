@@ -434,6 +434,83 @@ $$;
 revoke all on function public.is_chat_member(uuid, uuid) from public;
 grant execute on function public.is_chat_member(uuid, uuid) to authenticated;
 
+-- Read chat metadata without triggering RLS recursion.
+create or replace function public.chat_meta(_chat_id uuid)
+returns table(type text, name text, created_by uuid)
+language sql
+security definer
+set search_path = pg_catalog, public
+set row_security = off
+as $$
+  select c.type, c.name, c.created_by
+  from public.chats c
+  where c.id = _chat_id
+  limit 1;
+$$;
+
+revoke all on function public.chat_meta(uuid) from public;
+grant execute on function public.chat_meta(uuid) to authenticated;
+
+create or replace function public.is_chat_creator(_chat_id uuid, _user_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = pg_catalog, public
+set row_security = off
+as $$
+  select exists (
+    select 1 from public.chats c
+    where c.id = _chat_id
+      and c.created_by = _user_id
+  );
+$$;
+
+revoke all on function public.is_chat_creator(uuid, uuid) from public;
+grant execute on function public.is_chat_creator(uuid, uuid) to authenticated;
+
+-- DM helper: is `_user_id` one of the two participants for this direct chat id?
+create or replace function public.is_direct_chat_participant(_chat_id uuid, _user_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = pg_catalog, public
+set row_security = off
+as $$
+  select exists (
+    select 1
+    from public.chats c
+    where c.id = _chat_id
+      and c.type = 'direct'
+      and c.name like 'dm:%:%'
+      and _user_id::text in (split_part(c.name, ':', 2), split_part(c.name, ':', 3))
+  );
+$$;
+
+revoke all on function public.is_direct_chat_participant(uuid, uuid) from public;
+grant execute on function public.is_direct_chat_participant(uuid, uuid) to authenticated;
+
+-- DM helper: allow inserting membership rows only for the two DM participants.
+create or replace function public.is_direct_chat_pair(_chat_id uuid, _a uuid, _b uuid)
+returns boolean
+language sql
+security definer
+set search_path = pg_catalog, public
+set row_security = off
+as $$
+  select exists (
+    select 1
+    from public.chats c
+    where c.id = _chat_id
+      and c.type = 'direct'
+      and c.name like 'dm:%:%'
+      and _a::text in (split_part(c.name, ':', 2), split_part(c.name, ':', 3))
+      and _b::text in (split_part(c.name, ':', 2), split_part(c.name, ':', 3))
+  );
+$$;
+
+revoke all on function public.is_direct_chat_pair(uuid, uuid, uuid) from public;
+grant execute on function public.is_direct_chat_pair(uuid, uuid, uuid) to authenticated;
+
 drop policy if exists "Users can view chats" on public.chats;
 create policy "Users can view chats"
 on public.chats
@@ -475,15 +552,35 @@ create policy "Users can insert memberships"
 on public.group_members
 for insert
 to authenticated
-with check (true);
+with check (
+  -- user can always insert their own membership row (self-join)
+  auth.uid() = user_id
+  and (
+    -- already a member (idempotent / merge inserts)
+    public.is_chat_member(group_members.chat_id, auth.uid())
+    -- creator can add themselves (groups)
+    or public.is_chat_creator(group_members.chat_id, auth.uid())
+    -- DM participants can self-join based on deterministic dm:<a>:<b> key
+    or public.is_direct_chat_participant(group_members.chat_id, auth.uid())
+  )
+  -- additionally, allow inserting the other participant row only for DMs (so one side can link both)
+  or (
+    public.is_direct_chat_pair(group_members.chat_id, auth.uid(), user_id)
+  )
+);
 
 drop policy if exists "Users can update memberships" on public.group_members;
 create policy "Users can update memberships"
 on public.group_members
 for update
 to authenticated
-using (true)
-with check (true);
+using (
+  -- allow self updates only (role changes should be server-side/service-role)
+  auth.uid() = user_id
+)
+with check (
+  auth.uid() = user_id
+);
 -- =========================================
 -- MESSAGES POLICIES
 -- =========================================
@@ -496,13 +593,7 @@ with check (
   auth.uid() = sender_id
   and (
     public.is_chat_member(chat_id, auth.uid())
-    or exists (
-      select 1 from public.chats c
-      where c.id = messages.chat_id
-        and c.type = 'direct'
-        and c.name like 'dm:%:%'
-        and auth.uid()::text in (split_part(c.name, ':', 2), split_part(c.name, ':', 3))
-    )
+    or public.is_direct_chat_participant(messages.chat_id, auth.uid())
   )
 );
 
@@ -513,13 +604,7 @@ for select
 to authenticated
 using (
   public.is_chat_member(messages.chat_id, auth.uid())
-  or exists (
-    select 1 from public.chats c
-    where c.id = messages.chat_id
-      and c.type = 'direct'
-      and c.name like 'dm:%:%'
-      and auth.uid()::text in (split_part(c.name, ':', 2), split_part(c.name, ':', 3))
-  )
+  or public.is_direct_chat_participant(messages.chat_id, auth.uid())
 );
 
 drop policy if exists "Delete own messages" on public.messages;
