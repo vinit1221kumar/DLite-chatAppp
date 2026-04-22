@@ -1554,7 +1554,6 @@ export default function GroupChatPage() {
               </button>
             )}
           </div>
-          </div>
 
           {/* Typing indicator */}
           {groupTypingUsers.length > 0 && (
