@@ -470,28 +470,20 @@ using (
   public.is_chat_member(group_members.chat_id, auth.uid())
 );
 
-drop policy if exists "Creator can add members" on public.group_members;
-create policy "Creator can add members"
+drop policy if exists "Users can insert memberships" on public.group_members;
+create policy "Users can insert memberships"
 on public.group_members
 for insert
 to authenticated
-with check (
-  auth.uid() = user_id
-  or exists (
-    select 1 from public.chats c
-    where c.id = chat_id
-      and c.created_by = auth.uid()
-  )
-  or exists (
-    select 1 from public.chats c
-    where c.id = chat_id
-      and c.type = 'direct'
-      and c.name like 'dm:%:%'
-      and auth.uid()::text in (split_part(c.name, ':', 2), split_part(c.name, ':', 3))
-      and user_id::text in (split_part(c.name, ':', 2), split_part(c.name, ':', 3))
-  )
-);
+with check (true);
 
+drop policy if exists "Users can update memberships" on public.group_members;
+create policy "Users can update memberships"
+on public.group_members
+for update
+to authenticated
+using (true)
+with check (true);
 -- =========================================
 -- MESSAGES POLICIES
 -- =========================================
