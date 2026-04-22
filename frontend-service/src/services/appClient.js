@@ -1,5 +1,5 @@
-const DEFAULT_API = 'http://localhost:4000'
-const DEFAULT_SOCKET = 'http://localhost:4003'
+const DEFAULT_API = 'https://dlite-core.onrender.com'
+const DEFAULT_SOCKET = 'https://dlite-chatapp.onrender.com'
 
 /**
  * Core-backend origin only (no path). Fixes common misconfig:
