@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import time
+from uuid import UUID
 from typing import Any, Dict, Optional
 
 import httpx
@@ -36,6 +37,14 @@ def _cloudinary_signature(params: Dict[str, str], api_secret: str) -> str:
     """SHA1 signature for Cloudinary signed uploads (sorted key=value joined with &)."""
     pairs = "&".join(f"{k}={params[k]}" for k in sorted(params.keys()))
     return hashlib.sha1((pairs + api_secret).encode("utf-8")).hexdigest()
+
+
+def _is_uuid(value: str) -> bool:
+    try:
+        UUID(str(value))
+        return True
+    except Exception:
+        return False
 
 
 @router.post("/media/upload")
@@ -510,8 +519,8 @@ async def ensure_group(req: Request, authorization: Optional[str] = Header(defau
         async with httpx.AsyncClient(timeout=20.0) as client:
             chat = None
 
-            # Prefer explicit chat-id lookup when groupId is provided.
-            if group_id_input:
+            # Prefer explicit chat-id lookup only when groupId is actually a UUID.
+            if group_id_input and _is_uuid(group_id_input):
                 r_find_by_id = await client.get(
                     chats_url,
                     headers=postgrest_headers(use_service_role=True),
