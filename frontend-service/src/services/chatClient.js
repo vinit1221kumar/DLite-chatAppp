@@ -743,6 +743,43 @@ export function subscribeGroupMessages() {
     detach()
   }
 }
+
+/** When the realtime service emits group/chat removal, refresh lists (payload: { groupId }). */
+export function subscribeGroupDeleted(callback) {
+  const cb = typeof callback === 'function' ? callback : () => undefined
+  let disposed = false
+  let detach = () => undefined
+
+  ;(async () => {
+    const snapshot = await getCurrentAuthSnapshot().catch(() => null)
+    const uid = String(snapshot?.user?.id || '').trim()
+    if (!snapshot?.token || !uid) return
+    let s
+    try {
+      s = await getSocket({ userId: uid })
+    } catch {
+      return
+    }
+    const handler = (payload) => {
+      if (disposed || !payload) return
+      const groupId = String(payload.groupId || payload.chatId || payload.id || '').trim()
+      if (!groupId) return
+      cb({ groupId })
+    }
+    s.on('group_deleted', handler)
+    s.on('chat_deleted', handler)
+    detach = () => {
+      s.off('group_deleted', handler)
+      s.off('chat_deleted', handler)
+    }
+  })()
+
+  return () => {
+    disposed = true
+    detach()
+  }
+}
+
 export async function listUserGroups() {
   const snapshot = await getCurrentAuthSnapshot()
   if (!snapshot?.token) return []
