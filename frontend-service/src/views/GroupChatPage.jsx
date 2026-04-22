@@ -143,6 +143,8 @@ export default function GroupChatPage() {
   const isMember = !!user?.id && groupMembers.some((member) => member.id === user.id);
   const myRole = groupMembers.find((m) => m.id === user?.id)?.role || 'member';
   const isGroupAdmin = myRole === 'admin';
+  const activeGroup = groupList.find((g) => g.id === groupId.trim());
+  const activeGroupName = activeGroup?.name || groupId.trim();
   const senderNamesById = groupMembers.reduce((acc, member) => {
     acc[member.id] = member.username || member.id;
     return acc;
@@ -1140,7 +1142,7 @@ export default function GroupChatPage() {
               <div className="rounded-2xl border border-ui-border bg-ui-panel/70 px-3 py-2.5">
                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Current</p>
                 <p className="mt-1 truncate text-sm font-bold text-slate-900 dark:text-slate-100">
-                  {groupId.trim()}
+                  {activeGroupName}
                 </p>
                 <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{groupSubtitle}</p>
               </div>
@@ -1236,7 +1238,7 @@ export default function GroupChatPage() {
                 <div className="flex items-center gap-2">
                   <MessageSquare className="h-4 w-4 shrink-0 text-ui-accent" />
                   <h2 className="truncate text-base font-bold text-slate-900 dark:text-slate-50">
-                    {groupId.trim() ? groupId.trim() : 'Group chat'}
+                    {groupId.trim() ? activeGroupName : 'Group chat'}
                   </h2>
                 </div>
                 <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">

@@ -494,9 +494,11 @@ async def ensure_group(req: Request, authorization: Optional[str] = Header(defau
         return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
 
     body = await req.json()
-    group_key = str((body or {}).get("groupKey") or (body or {}).get("groupId") or "").strip()
-    if not group_key:
-        return JSONResponse(status_code=400, content={"success": False, "message": "groupKey is required"})
+    group_key_input = str((body or {}).get("groupKey") or "").strip()
+    group_id_input = str((body or {}).get("groupId") or "").strip()
+    group_lookup_key = group_key_input or group_id_input
+    if not group_lookup_key:
+        return JSONResponse(status_code=400, content={"success": False, "message": "groupKey or groupId is required"})
 
     if not SUPABASE_SERVICE_ROLE_KEY:
         return JSONResponse(status_code=503, content={"success": False, "message": "SUPABASE_SERVICE_ROLE_KEY is required for group writes"})
@@ -506,16 +508,34 @@ async def ensure_group(req: Request, authorization: Optional[str] = Header(defau
 
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
-            # Find existing group chat
-            r_find = await client.get(
-                chats_url,
-                headers=postgrest_headers(use_service_role=True),
-                params={"select": "id,name,type", "type": "eq.group", "name": f"eq.{group_key}", "limit": "1"},
-            )
-            if r_find.status_code >= 400:
-                return JSONResponse(status_code=_status_map(r_find.status_code), content={"success": False, "message": _supabase_hint(r_find)})
-            items = await safe_json_list(r_find)
-            chat = items[0] if items else None
+            chat = None
+
+            # Prefer explicit chat-id lookup when groupId is provided.
+            if group_id_input:
+                r_find_by_id = await client.get(
+                    chats_url,
+                    headers=postgrest_headers(use_service_role=True),
+                    params={"select": "id,name,type", "type": "eq.group", "id": f"eq.{group_id_input}", "limit": "1"},
+                )
+                if r_find_by_id.status_code >= 400:
+                    return JSONResponse(
+                        status_code=_status_map(r_find_by_id.status_code),
+                        content={"success": False, "message": _supabase_hint(r_find_by_id)},
+                    )
+                items_by_id = await safe_json_list(r_find_by_id)
+                chat = items_by_id[0] if items_by_id else None
+
+            # Fallback to name-based key lookup for create/open flows.
+            if not chat:
+                r_find = await client.get(
+                    chats_url,
+                    headers=postgrest_headers(use_service_role=True),
+                    params={"select": "id,name,type", "type": "eq.group", "name": f"eq.{group_lookup_key}", "limit": "1"},
+                )
+                if r_find.status_code >= 400:
+                    return JSONResponse(status_code=_status_map(r_find.status_code), content={"success": False, "message": _supabase_hint(r_find)})
+                items = await safe_json_list(r_find)
+                chat = items[0] if items else None
 
             if not chat:
                 r_create = await client.post(
@@ -524,7 +544,7 @@ async def ensure_group(req: Request, authorization: Optional[str] = Header(defau
                         use_service_role=True,
                         extra={"prefer": "resolution=merge-duplicates,return=representation"},
                     ),
-                    json={"type": "group", "name": group_key, "created_by": uid},
+                    json={"type": "group", "name": group_lookup_key, "created_by": uid},
                 )
                 if r_create.status_code >= 400:
                     # Some PostgREST/Supabase setups can't use ON CONFLICT with our partial unique index.
@@ -533,7 +553,7 @@ async def ensure_group(req: Request, authorization: Optional[str] = Header(defau
                         r_find2 = await client.get(
                             chats_url,
                             headers=postgrest_headers(use_service_role=True),
-                            params={"select": "id,name,type", "type": "eq.group", "name": f"eq.{group_key}", "limit": "1"},
+                            params={"select": "id,name,type", "type": "eq.group", "name": f"eq.{group_lookup_key}", "limit": "1"},
                         )
                         if r_find2.status_code >= 400:
                             return JSONResponse(
@@ -567,7 +587,7 @@ async def ensure_group(req: Request, authorization: Optional[str] = Header(defau
     except Exception as e:
         return JSONResponse(status_code=503, content={"success": False, "message": _net_err_hint(e)})
 
-    return {"success": True, "group": {"id": chat_id, "name": (chat or {}).get("name") or group_key}}
+    return {"success": True, "group": {"id": chat_id, "name": (chat or {}).get("name") or group_lookup_key}}
 
 
 @router.post("/dm/ensure")
