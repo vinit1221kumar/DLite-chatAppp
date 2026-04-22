@@ -674,8 +674,13 @@ export default function ChatDashboardPage() {
   const msgSearchLower = useMemo(() => msgSearch.trim().toLowerCase(), [msgSearch]);
   const deferredMsgSearchLower = useDeferredValue(msgSearchLower);
   const filteredMessages = useMemo(() => {
-    if (!deferredMsgSearchLower) return messages;
-    return messages.filter((m) => (m.content || '').toLowerCase().includes(deferredMsgSearchLower));
+    let result = messages;
+    if (deferredMsgSearchLower) {
+      result = messages.filter((m) => (m.content || '').toLowerCase().includes(deferredMsgSearchLower));
+    }
+    // FIX: Ensure messages are always sorted chronologically so optimistic updates 
+    // don't get 'stuck in between' when network requests resolve out of order.
+    return [...result].sort((a, b) => (Number(a.createdAt) || 0) - (Number(b.createdAt) || 0));
   }, [messages, deferredMsgSearchLower]);
   const pinnedSet = useMemo(() => new Set(pinnedMessages.map((p) => p.messageId)), [pinnedMessages]);
 
@@ -1059,9 +1064,10 @@ export default function ChatDashboardPage() {
     if (!shouldAutoScrollRef.current) return;
     const el = messagesWrapRef.current;
     if (!el) return;
-    // FIX: Scroll to latest message on send/receive when user is near bottom.
+    // FIX: Trigger scroll whenever the messages array updates, not just when length changes,
+    // so swapping optimistic IDs for real IDs still scrolls to the bottom if needed.
     el.scrollTop = el.scrollHeight;
-  }, [messages.length]);
+  }, [messages]);
 
   useLayoutEffect(() => {
     const ta = composerInputRef.current;
