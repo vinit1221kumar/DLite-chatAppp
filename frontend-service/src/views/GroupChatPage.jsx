@@ -127,6 +127,9 @@ export default function GroupChatPage() {
   const groupComposerRef = useRef(null);
   const messagesWrapRef = useRef(null);
   const shouldAutoScrollRef = useRef(true);
+  const lastGroupMessageCountRef = useRef(0);
+  const pendingGroupScrollCountRef = useRef(0);
+  const [pendingGroupScrollCount, setPendingGroupScrollCount] = useState(0);
 
   const [dmRecentChats, setDmRecentChats] = useState([]);
   const dmUnreadTotal = useMemo(
@@ -163,6 +166,12 @@ export default function GroupChatPage() {
     overscan: 12,
     getItemKey: (index) => filteredMessages[index]?._id ?? `grp-row-${index}`,
   });
+
+  const scrollGroupMessagesToLatest = useCallback(() => {
+    const el = messagesWrapRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, []);
 
   const MessageRow = useMemo(
     () =>
@@ -333,6 +342,10 @@ export default function GroupChatPage() {
       const thresholdPx = 140;
       const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
       shouldAutoScrollRef.current = distanceFromBottom < thresholdPx;
+      if (shouldAutoScrollRef.current && pendingGroupScrollCountRef.current > 0) {
+        pendingGroupScrollCountRef.current = 0;
+        setPendingGroupScrollCount(0);
+      }
     };
     el.addEventListener('scroll', onScroll, { passive: true });
     onScroll();
@@ -590,12 +603,36 @@ export default function GroupChatPage() {
   }, [groupId, user?.id, messagesRefreshTick]);
 
   useLayoutEffect(() => {
-    if (!shouldAutoScrollRef.current) return;
-    const el = messagesWrapRef.current;
-    if (!el) return;
-    // FIX: Scroll to latest message on send/receive when user is near bottom.
-    el.scrollTop = el.scrollHeight;
+    const currentCount = messages.length;
+    const previousCount = lastGroupMessageCountRef.current;
+
+    if (!groupId.trim()) {
+      lastGroupMessageCountRef.current = currentCount;
+      pendingGroupScrollCountRef.current = 0;
+      setPendingGroupScrollCount(0);
+      return;
+    }
+
+    if (shouldAutoScrollRef.current || previousCount === 0) {
+      // FIX: Scroll to latest message on send/receive when user is near bottom.
+      scrollGroupMessagesToLatest();
+      pendingGroupScrollCountRef.current = 0;
+      setPendingGroupScrollCount(0);
+    } else if (currentCount > previousCount) {
+      const nextPending = pendingGroupScrollCountRef.current + (currentCount - previousCount);
+      pendingGroupScrollCountRef.current = nextPending;
+      setPendingGroupScrollCount(nextPending);
+    }
+
+    lastGroupMessageCountRef.current = currentCount;
   }, [messages.length]);
+
+  useEffect(() => {
+    lastGroupMessageCountRef.current = 0;
+    pendingGroupScrollCountRef.current = 0;
+    setPendingGroupScrollCount(0);
+    shouldAutoScrollRef.current = true;
+  }, [groupId]);
 
   // Group typing subscription
   useEffect(() => {
@@ -1430,72 +1467,93 @@ export default function GroupChatPage() {
             </div>
           )}
 
-          <div
-            ref={messagesWrapRef}
-            className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain bg-ui-thread px-4 py-4"
-          >
-            {messagesLoadError && (
-              <div className="rounded-xl border border-red-400/40 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">
-                <p>{messagesLoadError}</p>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="mt-2 h-7 px-2 text-[11px]"
-                  onClick={() => setMessagesRefreshTick((value) => value + 1)}
+          <div className="relative min-h-0 flex-1">
+            <div
+              ref={messagesWrapRef}
+              className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain bg-ui-thread px-4 py-4"
+            >
+              {messagesLoadError && (
+                <div className="rounded-xl border border-red-400/40 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">
+                  <p>{messagesLoadError}</p>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="mt-2 h-7 px-2 text-[11px]"
+                    onClick={() => setMessagesRefreshTick((value) => value + 1)}
+                  >
+                    Retry
+                  </Button>
+                </div>
+              )}
+
+              {messagesLoading && (
+                <div className="rounded-xl border border-ui-border bg-ui-accent-subtle px-3 py-2 text-xs text-slate-700 dark:text-slate-300">
+                  Loading messages…
+                </div>
+              )}
+
+              {filteredMessages.length > 0 && (
+                <div
+                  className="relative w-full"
+                  style={{ height: `${groupMessageVirtualizer.getTotalSize()}px` }}
                 >
-                  Retry
-                </Button>
-              </div>
-            )}
+                  {groupMessageVirtualizer.getVirtualItems().map((virtualRow) => {
+                    const m = filteredMessages[virtualRow.index];
+                    const mine = m.senderId === user?.id;
+                    const senderName =
+                      mine ? user?.username || 'You' : senderNamesById[m.senderId] || 'Group member';
+                    const isPinned = pinnedSet.has(m._id);
+                    const readCount = mine ? Object.keys(m.readBy || {}).filter((uid) => uid !== user?.id).length : 0;
+                    const memberCount = groupMembers.length;
 
-            {messagesLoading && (
-              <div className="rounded-xl border border-ui-border bg-ui-accent-subtle px-3 py-2 text-xs text-slate-700 dark:text-slate-300">
-                Loading messages…
-              </div>
-            )}
+                    return (
+                      <div
+                        key={virtualRow.key}
+                        data-index={virtualRow.index}
+                        ref={groupMessageVirtualizer.measureElement}
+                        className="absolute left-0 top-0 w-full pb-2"
+                        style={{ transform: `translateY(${virtualRow.start}px)` }}
+                      >
+                        <MessageRow
+                          m={m}
+                          mine={mine}
+                          senderName={senderName}
+                          avatarSeed={mine ? user?.username || user?.id || 'you' : senderNamesById[m.senderId] || m.senderId || 'member'}
+                          isPinned={isPinned}
+                          readCount={readCount}
+                          memberCount={memberCount}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
-            {filteredMessages.length > 0 && (
-              <div
-                className="relative w-full"
-                style={{ height: `${groupMessageVirtualizer.getTotalSize()}px` }}
+              {filteredMessages.length === 0 && !messagesLoading && !messagesLoadError && (
+                <div className="flex h-full items-center justify-center px-4 text-center">
+                  <div className="max-w-sm rounded-2xl border border-dashed border-ui-border bg-ui-panel px-6 py-8 text-sm text-slate-600 dark:text-slate-300">
+                    <MessageSquare className="mx-auto h-10 w-10 text-ui-accent" />
+                    <p className="mt-3 font-semibold text-slate-800 dark:text-slate-100">No messages yet</p>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      Start the conversation by sending the first message.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {pendingGroupScrollCount > 0 && (
+              <button
+                type="button"
+                onClick={scrollGroupMessagesToLatest}
+                className="absolute bottom-4 right-4 z-20 rounded-full border border-ui-border bg-ui-panel px-3 py-2 text-xs font-medium text-slate-700 shadow-lg shadow-black/10 backdrop-blur hover:border-ui-accent hover:text-ui-accent dark:text-slate-100"
+                aria-label={`Jump to latest ${pendingGroupScrollCount} new message${pendingGroupScrollCount > 1 ? 's' : ''}`}
               >
-                {groupMessageVirtualizer.getVirtualItems().map((virtualRow) => {
-                  const m = filteredMessages[virtualRow.index];
-                  const mine = m.senderId === user?.id;
-                  const senderName =
-                    mine ? user?.username || 'You' : senderNamesById[m.senderId] || 'Group member';
-                  const isPinned = pinnedSet.has(m._id);
-                  const readCount = mine ? Object.keys(m.readBy || {}).filter((uid) => uid !== user?.id).length : 0;
-                  const memberCount = groupMembers.length;
-
-                  return (
-                    <div
-                      key={virtualRow.key}
-                      data-index={virtualRow.index}
-                      ref={groupMessageVirtualizer.measureElement}
-                      className="absolute left-0 top-0 w-full pb-2"
-                      style={{ transform: `translateY(${virtualRow.start}px)` }}
-                    >
-                      <MessageRow
-                        m={m}
-                        mine={mine}
-                        senderName={senderName}
-                        avatarSeed={mine ? user?.username || user?.id || 'you' : senderName || m.senderId || 'member'}
-                        isPinned={isPinned}
-                        readCount={readCount}
-                        memberCount={memberCount}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
+                {pendingGroupScrollCount} new message{pendingGroupScrollCount > 1 ? 's' : ''}
+              </button>
             )}
-            {messages.length === 0 && (
-              <div className="rounded-xl border border-dashed border-ui-border bg-ui-muted px-4 py-6 text-sm text-slate-600 dark:text-slate-300">
-                No messages yet. Set a groupId and send a message.
-              </div>
-            )}
+          </div>
           </div>
 
           {/* Typing indicator */}

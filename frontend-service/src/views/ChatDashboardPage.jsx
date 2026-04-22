@@ -17,130 +17,143 @@ import {
   listDirectMessages,
   deleteRecentDirectChat,
   exportDirectChatHistory,
-  importDirectChatHistory,
-  markDirectThreadRead,
-  markRecentDirectChatRead,
-  searchUsersByUsername,
-  sendDirectMedia,
-  sendDirectMessage,
-  setRecentDirectChatArchived,
-  setRecentDirectChatLocked,
-  subscribeDirectMessages,
-  subscribeRecentDirectChats,
-  subscribeUserPresence,
-  toggleDmReaction,
-  setDmTyping,
-  subscribeDmTyping,
-  pinDmMessage,
-  unpinDmMessage,
-  subscribePinnedDmMessages
-} from '../services/chatClient';
-import {
-  AtSign,
-  BarChart2,
-  ChevronDown,
-  ChevronUp,
-  FileText,
-  Film,
-  FolderOpen,
-  Loader2,
-  Lock,
-  Archive,
-  Download,
-  ImageIcon,
-  LayoutGrid,
-  Link2,
-  Mail,
-  MapPin,
-  MessageCircle,
-  Mic,
-  MicOff,
-  Monitor,
-  Phone,
-  Plus,
-  PlusCircle,
-  Tag,
-  Upload,
-  User,
-  Users,
-  Pin,
-  PinOff,
-  MoreVertical,
-  Pencil,
-  Paperclip,
-  Search,
-  Send,
-  SmilePlus,
-  Trash2,
-  Video,
-  X
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { ChatAppShell } from '@/components/ChatAppShell';
-import { ChatAppIconRail } from '@/components/ChatAppIconRail';
-import { ChatAppTopBar } from '@/components/ChatAppTopBar';
-import { ComposerOverflowMenu, composerMenuItemClass } from '@/components/ComposerOverflowMenu';
+            <div className="relative min-h-0 flex-1">
+              <div
+                ref={messagesWrapRef}
+                className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain bg-ui-thread px-3 py-3 sm:px-5 sm:py-4"
+              >
+                {messageLoadError && (
+                  <div className="rounded-2xl border border-red-400/40 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">
+                    <p>{messageLoadError}</p>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="mt-2 h-7 px-2 text-[11px]"
+                      onClick={() => setHistoryRefreshTick((value) => value + 1)}
+                    >
+                      Retry
+                    </Button>
+                  </div>
+                )}
 
-function RightDrawer({ open, title, onClose, children }) {
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => {
-      if (e.key === 'Escape') onClose?.();
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+                {messagesLoading && (
+                  <div className="rounded-2xl border border-ui-border bg-ui-panel px-3 py-2 text-xs text-slate-600 dark:text-slate-300">
+                    Loading messages…
+                  </div>
+                )}
 
-  if (!open || typeof document === 'undefined') return null;
+                {filteredMessages.length > 0 && (
+                  <div
+                    className="relative w-full"
+                    style={{ height: `${messageVirtualizer.getTotalSize()}px` }}
+                  >
+                    {messageVirtualizer.getVirtualItems().map((virtualRow) => {
+                      const m = filteredMessages[virtualRow.index];
+                      const idx = virtualRow.index;
+                      const prev = idx > 0 ? filteredMessages[idx - 1] : null;
+                      const currTs = Number(m.createdAt || 0);
+                      const prevTs = prev ? Number(prev.createdAt || 0) : 0;
+                      const showDate =
+                        currTs &&
+                        (!prevTs || !sameCalendarDay(currTs, prevTs));
+                      const mine = m.senderId === user?.id;
+                      const createdAt = Number(m.createdAt || 0);
+                      const canEditDelete = !m.isDeleted && createdAt && Date.now() - createdAt <= EDIT_WINDOW_MS;
+                      const senderLabel = mine ? `${user?.username || 'You'} (Me)` : peerLabel;
+                      const isPinned = pinnedSet.has(m._id);
+                      return (
+                        <div
+                          key={virtualRow.key}
+                          data-index={virtualRow.index}
+                          ref={messageVirtualizer.measureElement}
+                          className="absolute left-0 top-0 w-full pb-3"
+                          style={{ transform: `translateY(${virtualRow.start}px)` }}
+                        >
+                          {showDate ? (
+                            <p className="mb-3 text-center text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                              {formatDaySeparator(currTs)}
+                            </p>
+                          ) : null}
+                          <ChatMessageRow
+                            m={m}
+                            mine={mine}
+                            senderLabel={senderLabel}
+                            avatarSeed={
+                              mine
+                                ? user?.username || user?.id || 'you'
+                                : peerUsername || peerKey || 'peer'
+                            }
+                            canEditDelete={canEditDelete}
+                            isPinned={isPinned}
+                            peerKey={peerKey}
+                            peerUsername={peerUsername}
+                            userId={user?.id}
+                            openMessageMenuId={openMessageMenuId}
+                            deletingMessageId={deletingMessageId}
+                            toggleMessageMenu={toggleMessageMenu}
+                            handleEditMessage={handleEditMessage}
+                            handleDeleteMessage={handleDeleteMessage}
+                            handleDeleteForMe={handleDeleteForMe}
+                            handlePinDmMessage={handlePinDmMessage}
+                            handleUnpinDmMessage={handleUnpinDmMessage}
+                            openReactionPickerId={openReactionPickerId}
+                            setOpenReactionPickerId={setOpenReactionPickerId}
+                            EMOJI_OPTIONS={EMOJI_OPTIONS}
+                            handleToggleDmReaction={handleToggleDmReaction}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
 
-  return createPortal(
-    <div className="fixed inset-0 z-[190]" role="dialog" aria-modal="true" aria-label={title || 'Details'}>
-      <div className="absolute inset-0 bg-black/35 backdrop-blur-[1px]" onClick={onClose} />
-      <div className="absolute right-0 top-0 flex h-full w-full max-w-[420px] flex-col border-l border-ui-border bg-ui-panel shadow-2xl">
-        <div className="flex items-center justify-between gap-3 border-b border-ui-border px-4 py-3">
-          <p className="min-w-0 truncate text-sm font-bold text-slate-900 dark:text-slate-50">{title}</p>
-          <button
-            type="button"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-ui-muted hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-50"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <span className="text-xl leading-none">×</span>
-          </button>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto p-4">{children}</div>
-      </div>
-    </div>,
-    document.body
-  );
-}
+                {messages.length === 0 && (
+                  <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-12 text-center">
+                    <div className="rounded-3xl border border-dashed border-ui-border bg-ui-panel px-6 py-8">
+                      <MessageCircle className="mx-auto h-10 w-10 text-ui-accent" />
+                      <p className="mt-3 text-sm font-semibold text-slate-800 dark:text-slate-100">No messages yet</p>
+                      <p className="mt-1 max-w-sm text-xs text-slate-500 dark:text-slate-400">
+                        Say hi to start the conversation.
+                      </p>
+                      <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          className="h-8 rounded-full px-4 text-xs"
+                          disabled={!activeUserId.trim() || sendingMessage}
+                          onClick={() => sendQuickMessage('hi')}
+                        >
+                          Hi
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          className="h-8 rounded-full px-4 text-xs"
+                          disabled={!activeUserId.trim() || sendingMessage}
+                          onClick={() => sendQuickMessage('hello')}
+                        >
+                          Hello
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
 
-function sameCalendarDay(aMs, bMs) {
-  const da = new Date(aMs);
-  const db = new Date(bMs);
-  return da.getFullYear() === db.getFullYear() && da.getMonth() === db.getMonth() && da.getDate() === db.getDate();
-}
-
-function formatDaySeparator(ts) {
-  if (!ts) return '';
-  const d = new Date(Number(ts));
-  if (Number.isNaN(d.getTime())) return '';
-  const now = new Date();
-  const isToday = sameCalendarDay(d.getTime(), now.getTime());
-  const y = new Date(now);
-  y.setDate(y.getDate() - 1);
-  const isYesterday = sameCalendarDay(d.getTime(), y.getTime());
-  const timeStr = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-  if (isToday) return `Today ${timeStr}`;
-  if (isYesterday) return `Yesterday ${timeStr}`;
-  return d.toLocaleDateString(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}),
-  });
-}
-
+              {pendingDirectScrollCount > 0 && (
+                <button
+                  type="button"
+                  onClick={scrollDirectMessagesToLatest}
+                  className="absolute bottom-4 right-4 z-20 rounded-full border border-ui-border bg-ui-panel px-3 py-2 text-xs font-medium text-slate-700 shadow-lg shadow-black/10 backdrop-blur hover:border-ui-accent hover:text-ui-accent dark:text-slate-100"
+                  aria-label={`Jump to latest ${pendingDirectScrollCount} new message${pendingDirectScrollCount > 1 ? 's' : ''}`}
+                >
+                  {pendingDirectScrollCount} new message{pendingDirectScrollCount > 1 ? 's' : ''}
+                </button>
+              )}
+            </div>
 function formatMessageMetaTime(ts) {
   if (!ts) return '';
   const d = new Date(Number(ts));
@@ -664,6 +677,9 @@ export default function ChatDashboardPage() {
   const composerInputRef = useRef(null);
   const messagesWrapRef = useRef(null);
   const shouldAutoScrollRef = useRef(true);
+  const lastDirectMessageCountRef = useRef(0);
+  const pendingDirectScrollCountRef = useRef(0);
+  const [pendingDirectScrollCount, setPendingDirectScrollCount] = useState(0);
 
   const peerKey = useMemo(() => activeUserId.trim(), [activeUserId]);
   const peerShort = useMemo(() => {
@@ -691,6 +707,12 @@ export default function ChatDashboardPage() {
     overscan: 12,
     getItemKey: (index) => filteredMessages[index]?._id ?? `dm-row-${index}`,
   });
+
+  const scrollDirectMessagesToLatest = useCallback(() => {
+    const el = messagesWrapRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, []);
 
   const dmUnreadTotal = useMemo(
     () => recentChats.reduce((s, c) => s + Number(c.unreadCount || 0), 0),
@@ -757,6 +779,10 @@ export default function ChatDashboardPage() {
       const thresholdPx = 140;
       const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
       shouldAutoScrollRef.current = distanceFromBottom < thresholdPx;
+      if (shouldAutoScrollRef.current && pendingDirectScrollCountRef.current > 0) {
+        pendingDirectScrollCountRef.current = 0;
+        setPendingDirectScrollCount(0);
+      }
     };
     el.addEventListener('scroll', onScroll, { passive: true });
     onScroll();
@@ -1061,13 +1087,37 @@ export default function ChatDashboardPage() {
   }, []);
 
   useLayoutEffect(() => {
-    if (!shouldAutoScrollRef.current) return;
-    const el = messagesWrapRef.current;
-    if (!el) return;
-    // FIX: Trigger scroll whenever the messages array updates, not just when length changes,
-    // so swapping optimistic IDs for real IDs still scrolls to the bottom if needed.
-    el.scrollTop = el.scrollHeight;
-  }, [messages]);
+    const currentCount = messages.length;
+    const previousCount = lastDirectMessageCountRef.current;
+
+    if (!activeUserId.trim()) {
+      lastDirectMessageCountRef.current = currentCount;
+      pendingDirectScrollCountRef.current = 0;
+      setPendingDirectScrollCount(0);
+      return;
+    }
+
+    if (shouldAutoScrollRef.current || previousCount === 0) {
+      // FIX: Trigger scroll whenever the messages array updates, not just when length changes,
+      // so swapping optimistic IDs for real IDs still scrolls to the bottom if needed.
+      scrollDirectMessagesToLatest();
+      pendingDirectScrollCountRef.current = 0;
+      setPendingDirectScrollCount(0);
+    } else if (currentCount > previousCount) {
+      const nextPending = pendingDirectScrollCountRef.current + (currentCount - previousCount);
+      pendingDirectScrollCountRef.current = nextPending;
+      setPendingDirectScrollCount(nextPending);
+    }
+
+    lastDirectMessageCountRef.current = currentCount;
+  }, [messages, activeUserId, scrollDirectMessagesToLatest]);
+
+  useEffect(() => {
+    lastDirectMessageCountRef.current = 0;
+    pendingDirectScrollCountRef.current = 0;
+    setPendingDirectScrollCount(0);
+    shouldAutoScrollRef.current = true;
+  }, [activeUserId]);
 
   useLayoutEffect(() => {
     const ta = composerInputRef.current;
