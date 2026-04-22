@@ -275,9 +275,25 @@ end $$;
 -- - DMs: `core-backend` stores a deterministic `_dm_key()` in `chats.name`
 -- - Groups: `core-backend` can also look up by `name` when it uses a key-like value
 -- Without uniqueness, duplicate threads lead to unread/presence/membership inconsistencies.
-create unique index if not exists idx_chats_type_name_unique
-on public.chats(type, name)
-where name is not null;
+--
+-- IMPORTANT:
+-- Supabase PostgREST "upsert" / `on_conflict=...` requires a UNIQUE CONSTRAINT (or a non-partial unique index it can target).
+-- A partial unique index (WHERE ...) cannot be reliably targeted and can cause:
+--   42P10: "there is no unique or exclusion constraint matching the ON CONFLICT specification"
+--
+-- We therefore enforce uniqueness via a real constraint on (type, name).
+-- To keep it safe on existing databases, we backfill NULL names first.
+update public.chats
+set name = id::text
+where name is null;
+
+alter table public.chats
+  alter column name set not null;
+
+alter table public.chats
+  add constraint chats_type_name_unique unique (type, name);
+
+drop index if exists public.idx_chats_type_name_unique;
 
 create index if not exists idx_group_members_user_id on public.group_members(user_id);
 create index if not exists idx_group_members_chat_id on public.group_members(chat_id);
