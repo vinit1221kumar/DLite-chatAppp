@@ -7,6 +7,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { useAuth } from '../hooks/useAuth';
 import {
   addGroupMemberByUsername,
+  deleteGroup,
   deleteGroupMessage,
   ensureGroupMembership,
   leaveGroupMembership,
@@ -832,6 +833,29 @@ export default function GroupChatPage() {
     }
   };
 
+  const handleDeleteGroup = async () => {
+    if (!groupId.trim() || !user?.id) return;
+    if (
+      typeof window !== 'undefined' &&
+      !window.confirm('Delete this group for everyone? This action cannot be undone.')
+    )
+      return;
+    setPanelError('');
+    setPanelSuccess('');
+    try {
+      await deleteGroup({ groupId: groupId.trim() });
+      setPanelSuccess('Group deleted.');
+      setGroupId('');
+      setGroupInput('');
+      setMessages([]);
+      setGroupMembers([]);
+      setGroupMenuOpen(false);
+      await loadUserGroups();
+    } catch (err) {
+      setPanelError(err?.message || 'Could not delete group.');
+    }
+  };
+
   const handleShowMembers = () => {
     if (!groupId.trim()) return;
     setMembersModalOpen(true);
@@ -1322,6 +1346,16 @@ export default function GroupChatPage() {
                       >
                         <LogOut className="h-4 w-4 shrink-0" />
                         Leave group
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-red-700 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/50"
+                        onClick={handleDeleteGroup}
+                        disabled={!groupId.trim() || !user?.id}
+                      >
+                        <Trash2 className="h-4 w-4 shrink-0" />
+                        Delete group
                       </button>
                     </div>
                   )}

@@ -1263,6 +1263,58 @@ async def set_group_member_role(group_id: str, req: Request, authorization: Opti
     return {"success": True, "member": {"userId": target_user_id, "role": role}}
 
 
+@router.delete("/groups/{group_id}")
+async def delete_group(group_id: str, authorization: Optional[str] = Header(default=None)):
+    require_supabase()
+    user, access_token = await _require_user(authorization)
+    if not user or not access_token:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
+
+    uid = str(user.get("id") or "").strip()
+    if not uid:
+        return JSONResponse(status_code=401, content={"success": False, "message": "Invalid token"})
+
+    gid = str(group_id or "").strip()
+    if not gid:
+        return JSONResponse(status_code=400, content={"success": False, "message": "groupId is required"})
+
+    if not SUPABASE_SERVICE_ROLE_KEY:
+        return JSONResponse(status_code=503, content={"success": False, "message": "SUPABASE_SERVICE_ROLE_KEY is required for group writes"})
+
+    chats_url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/chats"
+    gm_url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/group_members"
+    headers = postgrest_headers(use_service_role=True)
+
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            # Admin check
+            r_mem = await client.get(
+                gm_url,
+                headers=headers,
+                params={"select": "role", "chat_id": f"eq.{gid}", "user_id": f"eq.{uid}", "limit": "1"},
+            )
+            if r_mem.status_code >= 400:
+                return JSONResponse(status_code=_status_map(r_mem.status_code), content={"success": False, "message": _supabase_hint(r_mem)})
+            mem_rows = await safe_json_list(r_mem)
+            if not mem_rows:
+                return JSONResponse(status_code=403, content={"success": False, "message": "You are not a member of this group"})
+            if _normalize_group_role((mem_rows[0] or {}).get("role")) != "admin":
+                return JSONResponse(status_code=403, content={"success": False, "message": "Admin only"})
+
+            # Delete group chat row; related data is removed by FK ON DELETE CASCADE.
+            r_del = await client.delete(
+                chats_url,
+                headers=postgrest_headers(use_service_role=True, extra={"prefer": "return=minimal"}),
+                params={"id": f"eq.{gid}", "type": "eq.group"},
+            )
+            if r_del.status_code not in (200, 204):
+                return JSONResponse(status_code=_status_map(r_del.status_code), content={"success": False, "message": _supabase_hint(r_del)})
+    except Exception as e:
+        return JSONResponse(status_code=503, content={"success": False, "message": _net_err_hint(e)})
+
+    return {"success": True, "groupId": gid}
+
+
 @router.post("/messages/send")
 async def send_message(req: Request, authorization: Optional[str] = Header(default=None)):
     require_supabase()
@@ -1276,7 +1328,7 @@ async def send_message(req: Request, authorization: Optional[str] = Header(defau
 
     body = await req.json()
     chat_id = str((body or {}).get("chatId") or (body or {}).get("threadId") or (body or {}).get("groupId") or "").strip()
-    content = str((body or {}).get("content") or "").strip()
+    content = str((body or {}).get("content") or (body or {}).get("message") or "").strip()
     msg_type = str((body or {}).get("type") or "text").strip() or "text"
     if not chat_id or not content:
         return JSONResponse(status_code=400, content={"success": False, "message": "chatId and content are required"})

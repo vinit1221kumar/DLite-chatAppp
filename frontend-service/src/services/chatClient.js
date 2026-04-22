@@ -646,7 +646,7 @@ export async function sendGroupMessage() {
   const snapshot = await getCurrentAuthSnapshot()
   if (!snapshot?.token) throw new Error('Not authenticated')
   const chatId = String(arguments?.[0]?.chatId || arguments?.[0]?.groupId || '').trim()
-  const content = String(arguments?.[0]?.content || '').trim()
+  const content = String(arguments?.[0]?.content || arguments?.[0]?.message || '').trim()
   const type = String(arguments?.[0]?.type || 'text').trim() || 'text'
   if (!chatId || !content) throw new Error('chatId and content are required')
   const res = await fetch(`${API_BASE_URL}/chat/messages/send`, {
@@ -669,6 +669,7 @@ export async function listGroupMessages() {
     _id: String(m.id || m._id || ''),
     chatId: m.chat_id || m.chatId || chatId,
     senderId: m.sender_id || m.senderId || '',
+    message: m.message || m.content || '',
     content: m.content || '',
     type: m.type || 'text',
     createdAt: m.created_at ? Date.parse(m.created_at) : Number(m.createdAt || Date.now()),
@@ -703,6 +704,7 @@ export function subscribeGroupMessages() {
           _id: String(message._id || message.id || ''),
           chatId,
           senderId: message.senderId || message.sender_id || '',
+          message: message.message || message.content || '',
           content: message.content || '',
           type: message.type || 'text',
           createdAt: Number(message.createdAt || Date.now()),
@@ -731,16 +733,30 @@ export async function listUserGroups() {
 export async function ensureGroupMembership() {
   const snapshot = await getCurrentAuthSnapshot()
   if (!snapshot?.token) throw new Error('Not authenticated')
-  const groupKey = String(arguments?.[0]?.groupId || arguments?.[0]?.groupKey || '').trim()
-  if (!groupKey) throw new Error('groupId is required')
+  const groupId = String(arguments?.[0]?.groupId || '').trim()
+  const groupKey = String(arguments?.[0]?.groupKey || groupId || '').trim()
+  if (!groupKey && !groupId) throw new Error('groupId or groupKey is required')
   const res = await fetch(`${API_BASE_URL}/chat/groups/ensure`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${snapshot.token}` },
-    body: JSON.stringify({ groupKey }),
+    body: JSON.stringify({ groupId: groupId || undefined, groupKey: groupKey || undefined }),
   })
   const json = await res.json().catch(() => ({}))
   if (!res.ok || json?.success === false) throw new Error(json?.message || 'Could not open group')
   return json?.group
+}
+export async function deleteGroup() {
+  const snapshot = await getCurrentAuthSnapshot()
+  if (!snapshot?.token) throw new Error('Not authenticated')
+  const groupId = String(arguments?.[0]?.groupId || arguments?.[0] || '').trim()
+  if (!groupId) throw new Error('groupId is required')
+  const res = await fetch(`${API_BASE_URL}/chat/groups/${encodeURIComponent(groupId)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${snapshot.token}` },
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok || json?.success === false) throw new Error(json?.message || 'Could not delete group')
+  return json
 }
 export async function addGroupMemberByUsername() {
   const snapshot = await getCurrentAuthSnapshot()
