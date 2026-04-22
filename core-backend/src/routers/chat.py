@@ -1342,6 +1342,8 @@ async def send_message(req: Request, authorization: Optional[str] = Header(defau
     if not chat_id or not content:
         return JSONResponse(status_code=400, content={"success": False, "message": "chatId and content are required"})
 
+    resolved_chat_id = chat_id
+
     base = SUPABASE_URL.rstrip('/')
     gm_url = f"{base}/rest/v1/group_members"
     chats_url = f"{base}/rest/v1/chats"
@@ -1355,10 +1357,25 @@ async def send_message(req: Request, authorization: Optional[str] = Header(defau
 
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
+            # Support older client flows that may still pass a group name instead of the UUID id.
+            if not _is_uuid(resolved_chat_id):
+                r_chat_by_name = await _pg_get(
+                    client,
+                    chats_url,
+                    {"select": "id,type,name,created_by", "type": "eq.group", "name": f"eq.{resolved_chat_id}", "limit": "1"},
+                    svc_headers=svc,
+                    user_headers=usr,
+                )
+                if r_chat_by_name.status_code < 400:
+                    chat_rows_by_name = await safe_json_list(r_chat_by_name)
+                    chat_by_name = chat_rows_by_name[0] if chat_rows_by_name else None
+                    if chat_by_name and chat_by_name.get("id"):
+                        resolved_chat_id = str(chat_by_name.get("id") or "").strip() or resolved_chat_id
+
             r_mem = await _pg_get(
                 client,
                 gm_url,
-                {"select": "chat_id,user_id", "chat_id": f"eq.{chat_id}", "user_id": f"eq.{uid}", "limit": "1"},
+                {"select": "chat_id,user_id", "chat_id": f"eq.{resolved_chat_id}", "user_id": f"eq.{uid}", "limit": "1"},
                 svc_headers=svc,
                 user_headers=usr,
             )
@@ -1371,7 +1388,7 @@ async def send_message(req: Request, authorization: Optional[str] = Header(defau
                 r_chat = await _pg_get(
                     client,
                     chats_url,
-                    {"select": "id,type,name,created_by", "id": f"eq.{chat_id}", "limit": "1"},
+                    {"select": "id,type,name,created_by", "id": f"eq.{resolved_chat_id}", "limit": "1"},
                     svc_headers=svc,
                     user_headers=usr,
                 )
@@ -1397,7 +1414,7 @@ async def send_message(req: Request, authorization: Optional[str] = Header(defau
                         r_join = await _pg_post(
                             client,
                             gm_url,
-                            json_body={"chat_id": chat_id, "user_id": uid, "role": "member"},
+                            json_body={"chat_id": resolved_chat_id, "user_id": uid, "role": "member"},
                             svc_headers=svc_merge,
                             user_headers=usr_merge,
                         )
@@ -1405,7 +1422,7 @@ async def send_message(req: Request, authorization: Optional[str] = Header(defau
                             r_mem_retry = await _pg_get(
                                 client,
                                 gm_url,
-                                {"select": "chat_id,user_id", "chat_id": f"eq.{chat_id}", "user_id": f"eq.{uid}", "limit": "1"},
+                                {"select": "chat_id,user_id", "chat_id": f"eq.{resolved_chat_id}", "user_id": f"eq.{uid}", "limit": "1"},
                                 svc_headers=svc,
                                 user_headers=usr,
                             )
@@ -1418,7 +1435,7 @@ async def send_message(req: Request, authorization: Optional[str] = Header(defau
             r_ins = await _pg_post(
                 client,
                 msg_url,
-                json_body={"chat_id": chat_id, "sender_id": uid, "content": content, "type": msg_type},
+                json_body={"chat_id": resolved_chat_id, "sender_id": uid, "content": content, "type": msg_type},
                 svc_headers=svc_rep,
                 user_headers=usr_rep,
             )
