@@ -262,15 +262,16 @@ async def _pg_post(
     client: httpx.AsyncClient,
     url: str,
     *,
+    params: Optional[Dict[str, str]] = None,
     json_body: Any,
     svc_headers: Optional[Dict[str, str]],
     user_headers: Dict[str, str],
 ) -> httpx.Response:
     if svc_headers:
-        r = await client.post(url, headers=svc_headers, json=json_body)
+        r = await client.post(url, headers=svc_headers, params=params, json=json_body)
         if r.status_code not in (401, 403):
             return r
-    return await client.post(url, headers=user_headers, json=json_body)
+    return await client.post(url, headers=user_headers, params=params, json=json_body)
 
 
 async def _pg_patch(
@@ -519,7 +520,12 @@ async def ensure_group(req: Request, authorization: Optional[str] = Header(defau
             if not chat:
                 r_create = await client.post(
                     chats_url,
-                    headers=postgrest_headers(use_service_role=True, extra={"prefer": "return=representation"}),
+                    # Idempotent create: enforce 1 chat per (type,name).
+                    headers=postgrest_headers(
+                        use_service_role=True,
+                        extra={"prefer": "resolution=merge-duplicates,return=representation"},
+                    ),
+                    params={"on_conflict": "type,name"},
                     json={"type": "group", "name": group_key, "created_by": uid},
                 )
                 if r_create.status_code >= 400:
@@ -569,8 +575,9 @@ async def ensure_dm(req: Request, authorization: Optional[str] = Header(default=
     gm_url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/group_members"
     svc = _service_headers()
     usr = postgrest_user_headers(access_token)
-    svc_rep = _service_headers(extra={"prefer": "return=representation"})
-    usr_rep = postgrest_user_headers(access_token, extra={"prefer": "return=representation"})
+    # Idempotent create: enforce 1 chat per (type,name) even under concurrency.
+    svc_rep = _service_headers(extra={"prefer": "resolution=merge-duplicates,return=representation"})
+    usr_rep = postgrest_user_headers(access_token, extra={"prefer": "resolution=merge-duplicates,return=representation"})
     svc_merge = _service_headers(extra={"prefer": "resolution=merge-duplicates,return=minimal"})
     usr_merge = postgrest_user_headers(access_token, extra={"prefer": "resolution=merge-duplicates,return=minimal"})
 
@@ -592,6 +599,7 @@ async def ensure_dm(req: Request, authorization: Optional[str] = Header(default=
                 r_create = await _pg_post(
                     client,
                     chats_url,
+                    params={"on_conflict": "type,name"},
                     json_body={"type": "direct", "name": dm_key, "created_by": uid},
                     svc_headers=svc_rep,
                     user_headers=usr_rep,
