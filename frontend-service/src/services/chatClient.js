@@ -1291,10 +1291,16 @@ export function subscribeUserPresence(_userId, callback) {
 export async function markRecentDirectChatRead() {
   const snapshot = await getCurrentAuthSnapshot()
   if (!snapshot?.token) return
-  const arg0 = arguments?.[0] || {}
+  const arg0 = arguments?.[0]
   const arg1 = arguments?.[1]
-  const threadIdRaw = String(arg0?.threadId || arg1 || arg0 || '').trim()
-  const peerId = String(arg0?.peerId || '').trim()
+
+  const arg0IsObject = arg0 && typeof arg0 === 'object' && !Array.isArray(arg0)
+  const threadIdRaw = String(
+    (arg0IsObject ? arg0?.threadId || arg0?.chatId : arg0) || arg1 || ''
+  ).trim()
+  const peerId = String(
+    (arg0IsObject ? arg0?.peerId : '') || ''
+  ).trim()
 
   let threadId = threadIdRaw
   if (!threadId && peerId) {
@@ -1319,37 +1325,56 @@ export async function markRecentDirectChatRead() {
 export async function deleteRecentDirectChat() {
   const snapshot = await getCurrentAuthSnapshot()
   if (!snapshot?.token) return
-  const threadId = String(arguments?.[0]?.threadId || arguments?.[0] || '').trim()
-  if (!threadId) return
-  await fetch(`${API_BASE_URL}/chat/dm/recent/settings`, {
+  const arg0 = arguments?.[0]
+  const arg0IsObject = arg0 && typeof arg0 === 'object' && !Array.isArray(arg0)
+  const threadId = String((arg0IsObject ? arg0?.threadId || arg0?.chatId : arg0) || '').trim()
+  const peerId = String(arg0IsObject ? arg0?.peerId || '' : '').trim()
+  if (!threadId && !peerId) return
+  const res = await fetch(`${API_BASE_URL}/chat/dm/recent/settings`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${snapshot.token}` },
-    body: JSON.stringify({ threadId, hidden: true }),
-  }).catch(() => undefined)
+    body: JSON.stringify({ ...(threadId ? { threadId } : {}), ...(peerId ? { peerId } : {}), hidden: true }),
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok || json?.success === false) {
+    throw new Error(json?.message || 'Could not delete recent chat')
+  }
 }
 export async function setRecentDirectChatArchived() {
   const snapshot = await getCurrentAuthSnapshot()
   if (!snapshot?.token) return
-  const threadId = String(arguments?.[0]?.threadId || '').trim()
-  const archived = Boolean(arguments?.[0]?.archived)
-  if (!threadId) return
-  await fetch(`${API_BASE_URL}/chat/dm/recent/settings`, {
+  const arg0 = arguments?.[0] || {}
+  const threadId = String(arg0?.threadId || arg0?.chatId || '').trim()
+  const peerId = String(arg0?.peerId || '').trim()
+  const archived = Boolean(arg0?.archived)
+  if (!threadId && !peerId) return
+  const res = await fetch(`${API_BASE_URL}/chat/dm/recent/settings`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${snapshot.token}` },
-    body: JSON.stringify({ threadId, archived }),
-  }).catch(() => undefined)
+    body: JSON.stringify({ ...(threadId ? { threadId } : {}), ...(peerId ? { peerId } : {}), archived }),
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok || json?.success === false) {
+    throw new Error(json?.message || 'Could not update archive setting')
+  }
 }
 export async function setRecentDirectChatLocked() {
   const snapshot = await getCurrentAuthSnapshot()
   if (!snapshot?.token) return
-  const threadId = String(arguments?.[0]?.threadId || '').trim()
-  const locked = Boolean(arguments?.[0]?.locked)
-  if (!threadId) return
-  await fetch(`${API_BASE_URL}/chat/dm/recent/settings`, {
+  const arg0 = arguments?.[0] || {}
+  const threadId = String(arg0?.threadId || arg0?.chatId || '').trim()
+  const peerId = String(arg0?.peerId || '').trim()
+  const locked = Boolean(arg0?.locked)
+  if (!threadId && !peerId) return
+  const res = await fetch(`${API_BASE_URL}/chat/dm/recent/settings`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${snapshot.token}` },
-    body: JSON.stringify({ threadId, locked }),
-  }).catch(() => undefined)
+    body: JSON.stringify({ ...(threadId ? { threadId } : {}), ...(peerId ? { peerId } : {}), locked }),
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok || json?.success === false) {
+    throw new Error(json?.message || 'Could not update lock setting')
+  }
 }
 export async function setMyPresence() {
   const snapshot = await getCurrentAuthSnapshot().catch(() => null)

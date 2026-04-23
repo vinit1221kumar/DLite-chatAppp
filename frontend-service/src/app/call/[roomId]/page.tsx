@@ -40,10 +40,96 @@ export default function ZegoCallRoomPage() {
   const [needsUserGesture, setNeedsUserGesture] = useState(false);
   const [remoteTiles, setRemoteTiles] = useState<RemoteTile[]>([]);
   const [copiedState, setCopiedState] = useState<"" | "code" | "link">("");
+  const [isMicEnabled, setIsMicEnabled] = useState(true);
+  const [isCameraEnabled, setIsCameraEnabled] = useState(mode === "video");
   const reconnectingRef = useRef(false);
 
   const server = useMemo(() => "wss://webliveroom-api.zego.im/ws", []);
   const hostedCallPath = useMemo(() => buildHostedCallUrl(roomId, mode), [mode, roomId]);
+  const statusLabel = useMemo(() => {
+    switch (status) {
+      case "getting_token":
+        return "Preparing call…";
+      case "initializing":
+        return "Starting media engine…";
+      case "logging_in":
+        return "Connecting to room…";
+      case "publishing":
+        return "Starting your stream…";
+      case "waiting_remote":
+        return "Waiting for others to join";
+      case "connected":
+        return "Live";
+      case "error":
+        return "Connection issue";
+      default:
+        return "Ready";
+    }
+  }, [status]);
+
+  const applyLocalTrackState = useMemo(
+    () => (stream: any) => {
+      if (!stream) return;
+      try {
+        const audioTracks = stream.getAudioTracks?.() || [];
+        audioTracks.forEach((track: MediaStreamTrack) => {
+          track.enabled = isMicEnabled;
+        });
+      } catch {
+        /* ignore */
+      }
+
+      try {
+        const videoTracks = stream.getVideoTracks?.() || [];
+        const shouldEnableVideo = mode === "video" && isCameraEnabled;
+        videoTracks.forEach((track: MediaStreamTrack) => {
+          track.enabled = shouldEnableVideo;
+        });
+      } catch {
+        /* ignore */
+      }
+    },
+    [isCameraEnabled, isMicEnabled, mode]
+  );
+
+  const toggleMic = () => {
+    const next = !isMicEnabled;
+    setIsMicEnabled(next);
+    const stream = localStreamRef.current;
+    if (!stream) return;
+    try {
+      const audioTracks = stream.getAudioTracks?.() || [];
+      audioTracks.forEach((track: MediaStreamTrack) => {
+        track.enabled = next;
+      });
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const toggleCamera = () => {
+    if (mode !== "video") return;
+    const next = !isCameraEnabled;
+    setIsCameraEnabled(next);
+    const stream = localStreamRef.current;
+    if (!stream) return;
+    try {
+      const videoTracks = stream.getVideoTracks?.() || [];
+      videoTracks.forEach((track: MediaStreamTrack) => {
+        track.enabled = next;
+      });
+    } catch {
+      /* ignore */
+    }
+  };
+
+  useEffect(() => {
+    if (mode !== "video") {
+      setIsCameraEnabled(false);
+    } else {
+      setIsCameraEnabled(true);
+    }
+  }, [mode]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -270,6 +356,7 @@ export default function ZegoCallRoomPage() {
             ? await zg.createZegoStream({ camera: { audio: true, video: false } })
             : await zg.createZegoStream({ camera: { audio: true, video: true } });
         localStreamRef.current = localStream;
+        applyLocalTrackState(localStream);
 
         try {
           localStream.playVideo?.(document.getElementById("dlite-zego-local"));
@@ -296,7 +383,11 @@ export default function ZegoCallRoomPage() {
       cancelled = true;
       cleanup();
     };
-  }, [mode, roomId, server, userId, userName]);
+  }, [applyLocalTrackState, mode, roomId, server, userId, userName]);
+
+  useEffect(() => {
+    applyLocalTrackState(localStreamRef.current);
+  }, [applyLocalTrackState]);
 
   useEffect(() => {
     if (!engineRef.current) return;
@@ -340,8 +431,32 @@ export default function ZegoCallRoomPage() {
             </p>
           </div>
           <div className="text-xs text-slate-500 dark:text-slate-400">
-            Status: <span className="font-semibold text-slate-700 dark:text-slate-200">{status}</span>
+            Status: <span className="font-semibold text-slate-700 dark:text-slate-200">{statusLabel}</span>
           </div>
+        </div>
+        <div className="mt-3 hidden flex-wrap items-center gap-2 lg:flex">
+          <button
+            type="button"
+            onClick={toggleMic}
+            className="rounded-full border border-ui-border bg-ui-panel px-3 py-1.5 text-xs font-semibold text-slate-800 transition hover:bg-white dark:text-slate-100 dark:hover:bg-white/10"
+          >
+            {isMicEnabled ? "Mute mic" : "Unmute mic"}
+          </button>
+          {mode === "video" ? (
+            <button
+              type="button"
+              onClick={toggleCamera}
+              className="rounded-full border border-ui-border bg-ui-panel px-3 py-1.5 text-xs font-semibold text-slate-800 transition hover:bg-white dark:text-slate-100 dark:hover:bg-white/10"
+            >
+              {isCameraEnabled ? "Turn camera off" : "Turn camera on"}
+            </button>
+          ) : null}
+          <Link
+            href="/call"
+            className="rounded-full border border-ui-border bg-ui-panel px-3 py-1.5 text-xs font-semibold text-slate-800 transition hover:bg-white dark:text-slate-100 dark:hover:bg-white/10"
+          >
+            Leave call
+          </Link>
         </div>
         {inviteCode ? (
           <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-ui-border bg-ui-muted px-3 py-3">
@@ -417,7 +532,13 @@ export default function ZegoCallRoomPage() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(280px,0.9fr)_minmax(0,1.1fr)]">
         <div className="rounded-2xl border border-ui-border bg-ui-panel p-3">
-          <p className="mb-2 text-xs font-semibold text-slate-700 dark:text-slate-200">Local</p>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">You</p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              Mic {isMicEnabled ? "on" : "off"}
+              {mode === "video" ? ` · Camera ${isCameraEnabled ? "on" : "off"}` : ""}
+            </p>
+          </div>
           <div id="dlite-zego-local" ref={localRef} className="aspect-video w-full overflow-hidden rounded-xl bg-black/90" />
           {mode === "audio" ? <p className="mt-2 text-[11px] text-slate-500">Audio-only: camera disabled.</p> : null}
         </div>
@@ -425,7 +546,9 @@ export default function ZegoCallRoomPage() {
         <div className="rounded-2xl border border-ui-border bg-ui-panel p-3">
           <div className="mb-2 flex items-center justify-between gap-3">
             <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">Participants</p>
-            <span className="text-[11px] text-slate-500 dark:text-slate-400">{remoteTiles.length} remote</span>
+            <span className="text-[11px] text-slate-500 dark:text-slate-400">
+              {remoteTiles.length} remote · {remoteTiles.length + 1} total
+            </span>
           </div>
           {remoteTiles.length > 0 ? (
             <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
@@ -438,8 +561,37 @@ export default function ZegoCallRoomPage() {
             </div>
           ) : null}
           {remoteTiles.length === 0 && (status === "waiting_remote" || status === "publishing" || status === "logging_in") ? (
-            <p className="text-[11px] text-slate-500">Waiting for others to join with the invite code…</p>
+            <div className="rounded-xl border border-ui-border bg-ui-muted px-3 py-3 text-[11px] text-slate-500 dark:text-slate-400">
+              Waiting for others to join with the invite code. Share code or call link above.
+            </div>
           ) : null}
+        </div>
+      </div>
+
+      <div className="sticky bottom-3 z-20 rounded-2xl border border-ui-border bg-ui-panel/95 p-2 shadow-lg backdrop-blur lg:hidden">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={toggleMic}
+            className="flex-1 rounded-xl border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-slate-800 transition hover:bg-white dark:text-slate-100 dark:hover:bg-white/10"
+          >
+            {isMicEnabled ? "Mute mic" : "Unmute mic"}
+          </button>
+          {mode === "video" ? (
+            <button
+              type="button"
+              onClick={toggleCamera}
+              className="flex-1 rounded-xl border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-slate-800 transition hover:bg-white dark:text-slate-100 dark:hover:bg-white/10"
+            >
+              {isCameraEnabled ? "Camera off" : "Camera on"}
+            </button>
+          ) : null}
+          <Link
+            href="/call"
+            className="rounded-xl border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-slate-800 transition hover:bg-white dark:text-slate-100 dark:hover:bg-white/10"
+          >
+            Leave
+          </Link>
         </div>
       </div>
     </div>

@@ -685,8 +685,9 @@ export default function ChatDashboardPage() {
 
   const scrollDirectMessagesToLatest = useCallback(() => {
     const el = messagesWrapRef.current;
-    if (!el) return;
+    if (!el || el.clientHeight <= 0) return false;
     el.scrollTop = el.scrollHeight;
+    return true;
   }, []);
 
   const dmUnreadTotal = useMemo(
@@ -1014,7 +1015,7 @@ export default function ChatDashboardPage() {
     };
   }, [user?.id, activeUserId, historyRefreshTick]);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const currentCount = messages.length;
     const previousCount = lastDirectMessageCountRef.current;
 
@@ -1026,9 +1027,15 @@ export default function ChatDashboardPage() {
     }
 
     if (shouldAutoScrollRef.current || previousCount === 0) {
-      scrollDirectMessagesToLatest();
-      pendingDirectScrollCountRef.current = 0;
-      setPendingDirectScrollCount(0);
+      const frame = window.requestAnimationFrame(() => {
+        const didScroll = scrollDirectMessagesToLatest();
+        if (didScroll) {
+          pendingDirectScrollCountRef.current = 0;
+          setPendingDirectScrollCount(0);
+        }
+      });
+      lastDirectMessageCountRef.current = currentCount;
+      return () => window.cancelAnimationFrame(frame);
     } else if (currentCount > previousCount) {
       const nextPending = pendingDirectScrollCountRef.current + (currentCount - previousCount);
       pendingDirectScrollCountRef.current = nextPending;
@@ -1688,11 +1695,23 @@ export default function ChatDashboardPage() {
                   className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-slate-800 transition-colors duration-150 hover:bg-ui-menu-hover dark:hover:bg-ui-menu-hover"
                   onClick={async () => {
                     try {
+                      const nextLocked = !recentMenu.chat.locked;
                       await setRecentDirectChatLocked({
                         userId: user?.id,
                         threadId: recentMenu.chat.threadId,
-                        locked: !recentMenu.chat.locked
+                        peerId: recentMenu.chat.peerId,
+                        locked: nextLocked
                       });
+                      setRecentChats((prev) =>
+                        prev.map((chat) =>
+                          chat.threadId === recentMenu.chat.threadId || chat.peerId === recentMenu.chat.peerId
+                            ? { ...chat, locked: nextLocked }
+                            : chat
+                        )
+                      );
+                      setActionError('');
+                    } catch (err) {
+                      setActionError(err?.message || 'Could not update lock setting.');
                     } finally {
                       setRecentMenu(null);
                     }
@@ -1708,11 +1727,23 @@ export default function ChatDashboardPage() {
                   className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-slate-800 transition-colors duration-150 hover:bg-ui-menu-hover dark:hover:bg-ui-menu-hover"
                   onClick={async () => {
                     try {
+                      const nextArchived = !recentMenu.chat.archived;
                       await setRecentDirectChatArchived({
                         userId: user?.id,
                         threadId: recentMenu.chat.threadId,
-                        archived: !recentMenu.chat.archived
+                        peerId: recentMenu.chat.peerId,
+                        archived: nextArchived
                       });
+                      setRecentChats((prev) =>
+                        prev.map((chat) =>
+                          chat.threadId === recentMenu.chat.threadId || chat.peerId === recentMenu.chat.peerId
+                            ? { ...chat, archived: nextArchived }
+                            : chat
+                        )
+                      );
+                      setActionError('');
+                    } catch (err) {
+                      setActionError(err?.message || 'Could not update archive setting.');
                     } finally {
                       setRecentMenu(null);
                     }
@@ -1735,11 +1766,22 @@ export default function ChatDashboardPage() {
                     try {
                       await deleteRecentDirectChat({
                         userId: user?.id,
-                        threadId: recentMenu.chat.threadId
+                        threadId: recentMenu.chat.threadId,
+                        peerId: recentMenu.chat.peerId
                       });
+                      setRecentChats((prev) =>
+                        prev.filter(
+                          (chat) =>
+                            chat.threadId !== recentMenu.chat.threadId &&
+                            chat.peerId !== recentMenu.chat.peerId
+                        )
+                      );
                       if (activeUserId.trim() === recentMenu.chat.peerId) {
                         clearPeer();
                       }
+                      setActionError('');
+                    } catch (err) {
+                      setActionError(err?.message || 'Could not delete chat from recent list.');
                     } finally {
                       setRecentMenu(null);
                     }

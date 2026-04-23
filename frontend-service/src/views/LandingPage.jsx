@@ -115,36 +115,6 @@ export default function LandingPage() {
       </header>
 
       <main>
-        {/* UI Sandbox banner */}
-        <div className="mx-auto max-w-6xl px-4 pt-6">
-          <div className="card flex flex-col gap-2 border-violet-200/70 bg-violet-50/60 px-4 py-3 text-sm text-slate-700 dark:border-violet-500/20 dark:bg-violet-950/30 dark:text-slate-200 sm:flex-row sm:items-center sm:justify-between">
-            <div className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span className="badge border-violet-300/60 bg-white/70 text-violet-800 dark:border-violet-400/20 dark:bg-white/5 dark:text-violet-200">
-                UI Sandbox
-              </span>
-              <span className="text-slate-600 dark:text-slate-300">
-                Mock API on <span className="font-medium">:4100</span> · Mock sockets on{' '}
-                <span className="font-medium">:4103</span>
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <a
-                href="#features"
-                className="rounded-md px-2 py-1 text-slate-600 no-underline hover:bg-white/60 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-slate-50"
-              >
-                Jump to features
-              </a>
-              <span className="text-slate-400 dark:text-slate-500">•</span>
-              <Link
-                href="/dashboard"
-                className="rounded-md px-2 py-1 font-medium text-violet-700 no-underline hover:bg-white/60 hover:text-violet-900 dark:text-violet-200 dark:hover:bg-white/5 dark:hover:text-violet-100"
-              >
-                Open dashboard
-              </Link>
-            </div>
-          </div>
-        </div>
-
         {/* Hero */}
         <div className="mx-auto grid w-full max-w-6xl grid-cols-1 items-center gap-10 px-4 pb-6 pt-10 md:grid-cols-2 md:gap-12 md:pt-14">
           <section>

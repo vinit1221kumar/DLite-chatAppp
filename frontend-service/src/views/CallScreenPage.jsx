@@ -38,6 +38,7 @@ export default function CallScreenPage() {
     const mode = String(searchParams?.get('mode') || '').trim();
     return ready || Boolean(callee) || mode === 'audio' || mode === 'video';
   }, [searchParams]);
+  const showJoinByInvite = useMemo(() => Boolean(buildGroupCallRoomId(roomCode)), [roomCode]);
 
   useEffect(() => {
     let unsubscribe = () => undefined;
@@ -156,6 +157,7 @@ export default function CallScreenPage() {
               </div>
             </div>
 
+            {showJoinByInvite ? (
             <div className="rounded-3xl border border-ui-border bg-ui-sidebar p-5">
               <div className="flex items-start gap-3">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-ui-border bg-ui-panel text-slate-700 dark:text-slate-200">
@@ -189,6 +191,7 @@ export default function CallScreenPage() {
                 {roomError ? <p className="text-sm text-rose-600 dark:text-rose-300">{roomError}</p> : null}
               </div>
             </div>
+            ) : null}
           </div>
         </div>
 
