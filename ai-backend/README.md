@@ -27,24 +27,24 @@ Base prefix: `/api/v1`
 
 This backend is fully isolated from the existing chat app backend.
 
-Speech endpoints use Hugging Face models by default:
+Speech endpoints use hosted providers:
 
-- STT: `openai/whisper-small`
-- TTS: `facebook/mms-tts-eng`
+- STT: `deepgram` (`nova-2`)
+- TTS: `elevenlabs`
 
 ## API keys and models
 
 Set your keys in `.env`:
 
 ```bash
-AI_BACKEND_HF_TOKEN=hf_xxx_your_token
+DEEPGRAM_API_KEY=dg_xxx
+ELEVENLABS_API_KEY=sk_xxx
+ELEVENLABS_VOICE_ID=onwK4LulDFLSqKGlkXAp
 OPENROUTER_API_KEY=sk-or-v1-xxx
 ```
 
 Default models:
 
 ```bash
-AI_BACKEND_STT_MODEL=openai/whisper-small
-AI_BACKEND_TTS_MODEL=facebook/mms-tts-eng
 OPENROUTER_MODEL=openai/gpt-4o-mini
 ```
