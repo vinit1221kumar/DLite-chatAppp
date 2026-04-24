@@ -53,9 +53,9 @@ class TextToSpeechRequest(BaseModel):
 class ModelInfoResponse(BaseModel):
     success: bool = True
     service: str = "ai-backend"
-    stt_model: str
-    tts_model: str
-    device: int
+    stt_provider: str = "deepgram"
+    tts_provider: str = "elevenlabs"
+    llm_provider: str = "openrouter"
 
 
 class VoiceChatResponse(BaseModel):
@@ -63,5 +63,5 @@ class VoiceChatResponse(BaseModel):
     service: str = "ai-backend"
     transcript: str
     reply_text: str
-    model: str
-    tts_model: str
+    stt_provider: str = "deepgram"
+    tts_provider: str = "elevenlabs"

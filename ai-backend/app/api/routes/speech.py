@@ -14,26 +14,26 @@ router = APIRouter(tags=["speech"])
 
 @router.get("/models", response_model=ModelInfoResponse)
 def models():
-    return ModelInfoResponse(stt_model=settings.stt_model, tts_model=settings.tts_model, device=settings.device)
+    return ModelInfoResponse()
 
 
 @router.post("/speech-to-text", response_model=SpeechToTextResponse)
 async def speech_to_text(audio: UploadFile = File(...)):
     suffix = Path(audio.filename or "audio.wav").suffix or ".wav"
     with NamedTemporaryFile(suffix=suffix, delete=True) as tmp:
-    tmp.write(await audio.read())
-    tmp.flush()
-    result = transcribe_audio_file(tmp.name)
+        tmp.write(await audio.read())
+        tmp.flush()
+        result = await transcribe_audio_file(tmp.name)
 
-    return SpeechToTextResponse(text=result["text"], language=result.get("language"), model=settings.stt_model)
+    return SpeechToTextResponse(text=result["text"], language=result.get("language"), model="deepgram-nova-2")
 
 
 @router.post("/text-to-speech")
-def text_to_speech(payload: TextToSpeechRequest):
-    wav_bytes, sample_rate = synthesize_text_to_wav_bytes(payload.text)
+async def text_to_speech(payload: TextToSpeechRequest):
+    wav_bytes, sample_rate = await synthesize_text_to_wav_bytes(payload.text)
     headers = {
         "Content-Disposition": 'inline; filename="speech.wav"',
-        "X-AI-TTS-Model": settings.tts_model,
+        "X-AI-TTS-Provider": "elevenlabs",
         "X-AI-Sample-Rate": str(sample_rate),
     }
     return Response(content=wav_bytes, media_type="audio/wav", headers=headers)
@@ -45,18 +45,18 @@ async def voice_chat(audio: UploadFile = File(...)):
     with NamedTemporaryFile(suffix=suffix, delete=True) as tmp:
         tmp.write(await audio.read())
         tmp.flush()
-        result = transcribe_audio_file(tmp.name)
+        result = await transcribe_audio_file(tmp.name)
 
     transcript = result["text"].strip()
     reply_text = build_friendly_reply(transcript)
-    wav_bytes, sample_rate = synthesize_text_to_wav_bytes(reply_text)
+    wav_bytes, sample_rate = await synthesize_text_to_wav_bytes(reply_text)
 
     headers = {
         "Content-Disposition": 'inline; filename="voice-chat.wav"',
         "X-AI-Transcript": transcript,
         "X-AI-Reply": reply_text,
-        "X-AI-STT-Model": settings.stt_model,
-        "X-AI-TTS-Model": settings.tts_model,
+        "X-AI-STT-Provider": "deepgram",
+        "X-AI-TTS-Provider": "elevenlabs",
         "X-AI-Sample-Rate": str(sample_rate),
     }
     return Response(content=wav_bytes, media_type="audio/wav", headers=headers)

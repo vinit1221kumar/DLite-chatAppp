@@ -126,7 +126,7 @@ export default function GroupChatPage() {
   const groupPhotoInputRef = useRef(null);
   const groupComposerRef = useRef(null);
   const messagesWrapRef = useRef(null);
-  const shouldAutoScrollRef = useRef(true);
+  const shouldAutoScrollRef = useRef(false);
   const lastGroupMessageCountRef = useRef(0);
   const pendingGroupScrollCountRef = useRef(0);
   const [pendingGroupScrollCount, setPendingGroupScrollCount] = useState(0);

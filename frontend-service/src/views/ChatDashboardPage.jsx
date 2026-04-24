@@ -62,6 +62,7 @@ import {
   Plus,
   PlusCircle,
   Tag,
+  Sparkles,
   Upload,
   User,
   Users,
@@ -576,6 +577,8 @@ const ChatMessageRow = memo(function ChatMessageRow({
 export default function ChatDashboardPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const [specialFriendLaunching, setSpecialFriendLaunching] = useState(false);
+  const specialFriendLaunchTimeoutRef = useRef(null);
   const [messages, setMessages] = useState([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [messageLoadError, setMessageLoadError] = useState('');
@@ -639,6 +642,15 @@ export default function ChatDashboardPage() {
   const composerInputRef = useRef(null);
   const messagesWrapRef = useRef(null);
 
+  useEffect(() => {
+    return () => {
+      if (specialFriendLaunchTimeoutRef.current) {
+        clearTimeout(specialFriendLaunchTimeoutRef.current);
+        specialFriendLaunchTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
   const startHostedCall = useCallback(async (targetUserId, mode) => {
     const callerId = String(user?.id || '').trim();
     const calleeId = String(targetUserId || '').trim();
@@ -656,6 +668,21 @@ export default function ChatDashboardPage() {
       setActionError('Could not start the call right now. Please try again.');
     }
   }, [router, user?.id]);
+
+  const handleSpecialFriendClick = useCallback(() => {
+    if (specialFriendLaunching) return;
+    setActionError('');
+    setSpecialFriendLaunching(true);
+
+    if (specialFriendLaunchTimeoutRef.current) {
+      clearTimeout(specialFriendLaunchTimeoutRef.current);
+    }
+
+    specialFriendLaunchTimeoutRef.current = window.setTimeout(() => {
+      router.push('/special-friend');
+    }, 650);
+  }, [router, specialFriendLaunching]);
+
   const peerKey = useMemo(() => activeUserId.trim(), [activeUserId]);
   const peerShort = useMemo(() => {
     if (!peerKey) return '—';
@@ -1324,10 +1351,17 @@ export default function ChatDashboardPage() {
   };
 
   return (
-    <ChatAppShell
-      topBar={<ChatAppTopBar />}
+    <>
+      <ChatAppShell
+        topBar={
+          <ChatAppTopBar
+            showSpecialFriend
+            onSpecialFriendClick={handleSpecialFriendClick}
+            specialFriendLaunching={specialFriendLaunching}
+          />
+        }
       gridClassName="grid-cols-1 lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)]"
-    >
+      >
       <aside className="flex max-h-[42vh] min-h-0 flex-col border-b border-ui-border bg-ui-sidebar lg:max-h-none lg:border-b-0 lg:border-r">
         <div className="shrink-0 border-b border-ui-border">
           <ChatAppIconRail active="dm" dmUnreadCount={dmUnreadTotal} />
@@ -2786,6 +2820,27 @@ export default function ChatDashboardPage() {
               </div>
             </div>
           </RightDrawer>
-    </ChatAppShell>
+      </ChatAppShell>
+
+      {specialFriendLaunching && typeof document !== 'undefined'
+        ? createPortal(
+            <div className="fixed inset-0 z-[260] overflow-hidden bg-slate-950/80">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(34,211,238,0.28),rgba(99,102,241,0.24),transparent_62%)]" />
+              <div className="anim-glow absolute left-1/2 top-1/2 h-[32rem] w-[32rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-400/20 blur-3xl" />
+              <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-4 text-center text-white">
+                <div className="relative flex h-28 w-28 items-center justify-center">
+                  <span className="absolute inset-0 rounded-full border border-cyan-200/40 animate-ping" />
+                  <span className="absolute inset-2 rounded-full border border-white/20 bg-white/5 backdrop-blur" />
+                  <span className="relative flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-cyan-300 via-sky-500 to-indigo-600 shadow-[0_0_60px_rgba(34,211,238,0.55)]">
+                    <Sparkles className="h-8 w-8 text-white" />
+                  </span>
+                </div>
+                <p className="text-sm font-semibold tracking-wide text-cyan-100">Opening Special Friend…</p>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+    </>
   );
 }
