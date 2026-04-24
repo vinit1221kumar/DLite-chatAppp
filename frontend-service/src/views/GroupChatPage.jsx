@@ -1480,7 +1480,7 @@ export default function GroupChatPage() {
           <div className="relative min-h-0 flex-1">
             <div
               ref={messagesWrapRef}
-              className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain bg-ui-thread px-4 py-4"
+              className="scrollbar-visible min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain bg-ui-thread px-4 py-4"
             >
               {messagesLoadError && (
                 <div className="rounded-xl border border-red-400/40 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">

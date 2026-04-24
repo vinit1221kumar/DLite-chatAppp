@@ -292,6 +292,30 @@
 }
 
 @layer utilities {
+  .scrollbar-visible {
+    scrollbar-width: auto;
+    scrollbar-color: var(--ui-accent) var(--ui-thread-bg);
+    scrollbar-gutter: stable;
+  }
+
+  .scrollbar-visible::-webkit-scrollbar {
+    width: 12px;
+  }
+
+  .scrollbar-visible::-webkit-scrollbar-track {
+    background: var(--ui-thread-bg);
+  }
+
+  .scrollbar-visible::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    border: 3px solid var(--ui-thread-bg);
+    background: linear-gradient(180deg, var(--ui-grad-from), var(--ui-grad-to));
+  }
+
+  .scrollbar-visible::-webkit-scrollbar-thumb:hover {
+    filter: brightness(1.08);
+  }
+
   @keyframes floaty {
     0%,
     100% {
