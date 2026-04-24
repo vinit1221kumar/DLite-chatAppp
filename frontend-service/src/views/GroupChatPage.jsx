@@ -170,10 +170,21 @@ export default function GroupChatPage() {
   const scrollGroupMessagesToLatest = useCallback(() => {
     const el = messagesWrapRef.current;
     if (!el) return;
-    shouldAutoScrollRef.current = true;
     el.scrollTop = el.scrollHeight;
     pendingGroupScrollCountRef.current = 0;
     setPendingGroupScrollCount(0);
+  }, []);
+
+  const scrollGroupMessagesUp = useCallback(() => {
+    const el = messagesWrapRef.current;
+    if (!el) return;
+    el.scrollBy({ top: -280, behavior: 'smooth' });
+  }, []);
+
+  const scrollGroupMessagesDown = useCallback(() => {
+    const el = messagesWrapRef.current;
+    if (!el) return;
+    el.scrollBy({ top: 280, behavior: 'smooth' });
   }, []);
 
   const MessageRow = useMemo(
@@ -616,31 +627,21 @@ export default function GroupChatPage() {
       return;
     }
 
-    if (previousCount === 0) {
-      scrollGroupMessagesToLatest();
-      lastGroupMessageCountRef.current = currentCount;
-      return;
-    }
-
     if (currentCount > previousCount) {
-      if (shouldAutoScrollRef.current) {
-        scrollGroupMessagesToLatest();
-      } else {
-        const addedCount = currentCount - previousCount;
-        const nextPending = pendingGroupScrollCountRef.current + addedCount;
-        pendingGroupScrollCountRef.current = nextPending;
-        setPendingGroupScrollCount(nextPending);
-      }
+      const addedCount = currentCount - previousCount;
+      const nextPending = pendingGroupScrollCountRef.current + addedCount;
+      pendingGroupScrollCountRef.current = nextPending;
+      setPendingGroupScrollCount(nextPending);
     }
 
     lastGroupMessageCountRef.current = currentCount;
-  }, [messages.length, groupId, scrollGroupMessagesToLatest]);
+  }, [messages.length, groupId]);
 
   useEffect(() => {
     lastGroupMessageCountRef.current = 0;
     pendingGroupScrollCountRef.current = 0;
     setPendingGroupScrollCount(0);
-    shouldAutoScrollRef.current = true;
+    shouldAutoScrollRef.current = false;
   }, [groupId]);
 
   // Group typing subscription
@@ -1552,16 +1553,34 @@ export default function GroupChatPage() {
               )}
             </div>
 
-            {pendingGroupScrollCount > 0 && (
+            <div className="absolute bottom-4 right-4 z-20 flex items-center gap-2">
               <button
                 type="button"
-                onClick={scrollGroupMessagesToLatest}
-                className="absolute bottom-4 right-4 z-20 rounded-full border border-ui-border bg-ui-panel px-3 py-2 text-xs font-medium text-slate-700 shadow-lg shadow-black/10 backdrop-blur hover:border-ui-accent hover:text-ui-accent dark:text-slate-100"
-                aria-label={`Jump to latest ${pendingGroupScrollCount} new message${pendingGroupScrollCount > 1 ? 's' : ''}`}
+                onClick={scrollGroupMessagesUp}
+                className="rounded-full border border-ui-border bg-ui-panel px-3 py-2 text-xs font-medium text-slate-700 shadow-lg shadow-black/10 backdrop-blur hover:border-ui-accent hover:text-ui-accent dark:text-slate-100"
+                aria-label="Scroll up"
               >
-                {pendingGroupScrollCount} new message{pendingGroupScrollCount > 1 ? 's' : ''}
+                ↑
               </button>
-            )}
+              <button
+                type="button"
+                onClick={scrollGroupMessagesDown}
+                className="rounded-full border border-ui-border bg-ui-panel px-3 py-2 text-xs font-medium text-slate-700 shadow-lg shadow-black/10 backdrop-blur hover:border-ui-accent hover:text-ui-accent dark:text-slate-100"
+                aria-label="Scroll down"
+              >
+                ↓
+              </button>
+              {pendingGroupScrollCount > 0 && (
+                <button
+                  type="button"
+                  onClick={scrollGroupMessagesToLatest}
+                  className="rounded-full border border-ui-border bg-ui-panel px-3 py-2 text-xs font-medium text-slate-700 shadow-lg shadow-black/10 backdrop-blur hover:border-ui-accent hover:text-ui-accent dark:text-slate-100"
+                  aria-label={`Jump to latest ${pendingGroupScrollCount} new message${pendingGroupScrollCount > 1 ? 's' : ''}`}
+                >
+                  {pendingGroupScrollCount} new message{pendingGroupScrollCount > 1 ? 's' : ''}
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Typing indicator */}
@@ -1596,7 +1615,7 @@ export default function GroupChatPage() {
                   value={message}
                   onChange={handleGroupMessageInput}
                   placeholder={groupId.trim() ? 'Message' : 'Open a group'}
-                  disabled={!groupId.trim() || !isMember}
+                  disabled={!groupId.trim()}
                 />
                 <button
                   type="submit"

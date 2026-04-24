@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Mic, MicOff, Sparkles, Volume2 } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { ArrowLeft, MessageCircle, Mic, MicOff, Send, Sparkles, Volume2 } from 'lucide-react';
 import { useReducedMotion } from 'framer-motion';
 import { ChatAppShell } from '@/components/ChatAppShell';
 import { ChatAppTopBar } from '@/components/ChatAppTopBar';
@@ -10,11 +11,26 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 export default function SpecialFriendPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const selectedMode = String(searchParams?.get('mode') || 'voice').toLowerCase() === 'chat' ? 'chat' : 'voice';
+  const isChatMode = selectedMode === 'chat';
+
   const prefersReducedMotion = useReducedMotion();
   const [listening, setListening] = useState(false);
   const [level, setLevel] = useState(0.08);
   const [status, setStatus] = useState('Idle');
   const [error, setError] = useState('');
+  const [chatInput, setChatInput] = useState('');
+  const [chatSending, setChatSending] = useState(false);
+  const [chatMessages, setChatMessages] = useState([
+    {
+      id: 'sf-welcome',
+      role: 'assistant',
+      text: 'Heyy ✨ I am your Special Friend. Tell me how your day is going?',
+    },
+  ]);
+  const chatListRef = useRef(null);
 
   const streamRef = useRef(null);
   const audioContextRef = useRef(null);
@@ -23,6 +39,7 @@ export default function SpecialFriendPage() {
   const rafRef = useRef(0);
   const tickRef = useRef(0);
   const lastFrameRef = useRef(0);
+  const voiceAutoStartAttemptedRef = useRef(false);
 
   const stopListening = useCallback(() => {
     setListening(false);
@@ -56,6 +73,11 @@ export default function SpecialFriendPage() {
     analyserRef.current = null;
     lastFrameRef.current = 0;
   }, []);
+
+  const goToDashboard = useCallback(() => {
+    stopListening();
+    router.push('/dashboard');
+  }, [router, stopListening]);
 
   useEffect(() => () => stopListening(), [stopListening]);
 
@@ -144,6 +166,147 @@ export default function SpecialFriendPage() {
     return 'Listening for your voice…';
   }, [listening, speaking]);
 
+  const buildSpecialFriendReply = useCallback((text) => {
+    const clean = String(text || '').trim();
+    if (!clean) return 'I am listening 👀';
+    const lower = clean.toLowerCase();
+    if (/(hi|hello|hey|yo)\b/.test(lower)) return 'Hii bestie 💫 what vibe are we on today?';
+    if (/(sad|bad|tired|upset|stressed)\b/.test(lower)) return 'Aww, come here 🫶 I am with you. Want to talk it out?';
+    if (/(thanks|thank you|thx)\b/.test(lower)) return 'Anytimeee 😄';
+    if (/(joke|funny)\b/.test(lower)) return 'Tiny joke: why was the chat calm? good vibes firewall 😌';
+    return `Got you ✨ ${clean.slice(0, 140)}`;
+  }, []);
+
+  const handleSendChat = useCallback(
+    async (event) => {
+      event.preventDefault();
+      const content = chatInput.trim();
+      if (!content || chatSending) return;
+
+      const userMessage = { id: `u-${Date.now()}`, role: 'user', text: content };
+      setChatMessages((prev) => [...prev, userMessage]);
+      setChatInput('');
+      setChatSending(true);
+
+      const replyText = buildSpecialFriendReply(content);
+      window.setTimeout(() => {
+        setChatMessages((prev) => [...prev, { id: `a-${Date.now()}`, role: 'assistant', text: replyText }]);
+        setChatSending(false);
+      }, 240);
+    },
+    [buildSpecialFriendReply, chatInput, chatSending]
+  );
+
+  useEffect(() => {
+    if (!isChatMode) return;
+    const el = chatListRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [chatMessages, isChatMode]);
+
+  useEffect(() => {
+    if (isChatMode) {
+      stopListening();
+      return;
+    }
+
+    if (voiceAutoStartAttemptedRef.current || listening) return;
+    voiceAutoStartAttemptedRef.current = true;
+
+    const timer = window.setTimeout(() => {
+      startListening().catch(() => undefined);
+    }, 120);
+
+    return () => window.clearTimeout(timer);
+  }, [isChatMode, listening, startListening, stopListening]);
+
+  if (isChatMode) {
+    return (
+      <ChatAppShell topBar={<ChatAppTopBar />} gridClassName="grid-cols-1" className="app-shell">
+        <section className="relative flex min-h-0 flex-1 overflow-hidden bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.12),rgba(15,23,42,0.96)_58%)]">
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.15),rgba(15,23,42,0.78))]" />
+          <div className="relative z-10 mx-auto flex w-full max-w-5xl min-h-0 flex-1 flex-col px-4 py-6 sm:px-6">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-white/[0.06] px-3 py-1 text-[11px] font-semibold tracking-wide text-cyan-100">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Special Friend chat
+                </p>
+                <h1 className="mt-2 text-2xl font-black tracking-tight text-white sm:text-3xl">Special Friend</h1>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button asChild className="gap-2 rounded-full bg-gradient-to-r from-cyan-500 to-indigo-600 text-white hover:brightness-110">
+                  <Link href="/special-friend?mode=voice" className="no-underline">
+                    <Mic className="h-4 w-4" />
+                    Voice mode
+                  </Link>
+                </Button>
+                <Button asChild variant="secondary" className="gap-2 rounded-full border-ui-border bg-white/[0.06] text-white hover:bg-white/[0.12]">
+                  <button type="button" className="no-underline" onClick={goToDashboard}>
+                    <ArrowLeft className="h-4 w-4" />
+                    Back to dashboard
+                  </button>
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-white/15 bg-slate-900/55 shadow-[0_25px_70px_-30px_rgba(15,23,42,0.65)] backdrop-blur">
+              <div ref={chatListRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 sm:px-5">
+                {chatMessages.map((item) => {
+                  const mine = item.role === 'user';
+                  return (
+                    <div key={item.id} className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
+                      <div
+                        className={cn(
+                          'max-w-[86%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed',
+                          mine
+                            ? 'bg-gradient-to-r from-violet-500 via-fuchsia-500 to-indigo-600 text-white'
+                            : 'border border-white/15 bg-white/[0.06] text-slate-100'
+                        )}
+                      >
+                        <p className="whitespace-pre-wrap break-words">{item.text}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+                {chatSending ? (
+                  <div className="flex justify-start">
+                    <div className="rounded-2xl border border-white/15 bg-white/[0.06] px-3.5 py-2.5 text-sm text-slate-200">
+                      Special Friend is typing…
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              <form onSubmit={handleSendChat} className="border-t border-white/10 bg-slate-900/40 p-3 sm:p-4">
+                <div className="flex items-end gap-2">
+                  <div className="relative flex min-h-[44px] min-w-0 flex-1 items-center rounded-full border border-white/15 bg-white/[0.06] px-3">
+                    <MessageCircle className="mr-2 h-4 w-4 shrink-0 text-slate-300" />
+                    <textarea
+                      rows={1}
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      placeholder="Message Special Friend..."
+                      className="min-h-[38px] max-h-32 min-w-0 flex-1 resize-none bg-transparent py-2 text-sm text-white outline-none placeholder:text-slate-400"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={!chatInput.trim() || chatSending}
+                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-cyan-500 to-indigo-600 text-white shadow-lg transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-55"
+                    aria-label="Send message"
+                  >
+                    <Send className="h-4.5 w-4.5" />
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </section>
+      </ChatAppShell>
+    );
+  }
+
   return (
     <ChatAppShell topBar={<ChatAppTopBar />} gridClassName="grid-cols-1" className="app-shell">
       <section className="relative flex min-h-0 flex-1 overflow-hidden bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.18),rgba(15,23,42,0.98)_58%)]">
@@ -206,10 +369,10 @@ export default function SpecialFriendPage() {
               {listening ? 'Stop voice' : 'Start voice'}
             </Button>
             <Button asChild variant="secondary" className="gap-2 rounded-full border-ui-border bg-white/[0.06] px-5 py-3 text-white hover:bg-white/[0.12]">
-              <Link href="/dashboard" className="no-underline">
+              <button type="button" className="no-underline" onClick={goToDashboard}>
                 <ArrowLeft className="h-4 w-4" />
                 Back to dashboard
-              </Link>
+              </button>
             </Button>
           </div>
 
