@@ -2858,14 +2858,19 @@ export default function ChatDashboardPage() {
                       <MessageCircle className="h-4 w-4" />
                       Chat
                     </button>
-                    <button
-                      type="button"
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-cyan-200/30 bg-cyan-500/20 px-4 py-3 text-sm font-semibold text-white transition hover:bg-cyan-500/35"
-                      onClick={() => continueToSpecialFriend('voice')}
-                    >
-                      <Mic className="h-4 w-4" />
-                      Voice
-                    </button>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        disabled
+                        className="w-full inline-flex items-center justify-center gap-2 rounded-2xl border border-cyan-200/20 bg-cyan-500/10 px-4 py-3 text-sm font-semibold text-cyan-200/60 cursor-not-allowed opacity-60"
+                      >
+                        <Mic className="h-4 w-4" />
+                        Voice
+                      </button>
+                      <span className="absolute -top-2 -right-2 inline-flex rounded-full bg-cyan-500 px-2 py-0.5 text-xs font-semibold text-white shadow-lg">
+                        Coming soon
+                      </span>
+                    </div>
                   </div>
                   <button
                     type="button"
