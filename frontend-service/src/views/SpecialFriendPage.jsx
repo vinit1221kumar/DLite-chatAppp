@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, MessageCircle, Mic, MicOff, Send, Sparkles, Volume2 } from 'lucide-react';
 import { useReducedMotion } from 'framer-motion';
@@ -13,7 +12,7 @@ import { cn } from '@/lib/utils';
 export default function SpecialFriendPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const selectedMode = String(searchParams?.get('mode') || 'voice').toLowerCase() === 'chat' ? 'chat' : 'voice';
+  const selectedMode = String(searchParams?.get('mode') || 'chat').toLowerCase() === 'chat' ? 'chat' : 'voice';
   const isChatMode = selectedMode === 'chat';
 
   const prefersReducedMotion = useReducedMotion();
@@ -31,6 +30,7 @@ export default function SpecialFriendPage() {
     },
   ]);
   const chatListRef = useRef(null);
+  const aiBackendBaseUrl = (process.env.NEXT_PUBLIC_AI_BACKEND_URL || 'https://dlite-ai.onrender.com').replace(/\/+$/g, '');
 
   const streamRef = useRef(null);
   const audioContextRef = useRef(null);
@@ -188,13 +188,35 @@ export default function SpecialFriendPage() {
       setChatInput('');
       setChatSending(true);
 
-      const replyText = buildSpecialFriendReply(content);
-      window.setTimeout(() => {
+      const payloadMessages = [...chatMessages, userMessage].map(({ role, text }) => ({
+        role,
+        content: text,
+      }));
+
+      try {
+        const response = await fetch(`${aiBackendBaseUrl}/api/v1/chat`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ messages: payloadMessages }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        const replyText = String(data?.reply || '').trim() || buildSpecialFriendReply(content);
         setChatMessages((prev) => [...prev, { id: `a-${Date.now()}`, role: 'assistant', text: replyText }]);
+      } catch (err) {
+        const fallbackText = buildSpecialFriendReply(content);
+        setChatMessages((prev) => [...prev, { id: `a-${Date.now()}`, role: 'assistant', text: fallbackText }]);
+      } finally {
         setChatSending(false);
-      }, 240);
+      }
     },
-    [buildSpecialFriendReply, chatInput, chatSending]
+    [aiBackendBaseUrl, buildSpecialFriendReply, chatInput, chatMessages, chatSending]
   );
 
   useEffect(() => {
@@ -205,20 +227,8 @@ export default function SpecialFriendPage() {
   }, [chatMessages, isChatMode]);
 
   useEffect(() => {
-    if (isChatMode) {
-      stopListening();
-      return;
-    }
-
-    if (voiceAutoStartAttemptedRef.current || listening) return;
-    voiceAutoStartAttemptedRef.current = true;
-
-    const timer = window.setTimeout(() => {
-      startListening().catch(() => undefined);
-    }, 120);
-
-    return () => window.clearTimeout(timer);
-  }, [isChatMode, listening, startListening, stopListening]);
+    stopListening();
+  }, [isChatMode, stopListening]);
 
   if (isChatMode) {
     return (
@@ -235,12 +245,19 @@ export default function SpecialFriendPage() {
                 <h1 className="mt-2 text-2xl font-black tracking-tight text-white sm:text-3xl">Special Friend</h1>
               </div>
               <div className="flex items-center gap-2">
-                <Button asChild className="gap-2 rounded-full bg-gradient-to-r from-cyan-500 to-indigo-600 text-white hover:brightness-110">
-                  <Link href="/special-friend?mode=voice" className="no-underline">
+                <div className="relative">
+                  <Button
+                    type="button"
+                    disabled
+                    className="gap-2 rounded-full bg-gradient-to-r from-cyan-500/60 to-indigo-600/60 text-white/80 opacity-80"
+                  >
                     <Mic className="h-4 w-4" />
                     Voice mode
-                  </Link>
-                </Button>
+                  </Button>
+                  <span className="absolute -right-2 -top-2 inline-flex rounded-full bg-cyan-500 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white shadow-lg">
+                    Coming soon
+                  </span>
+                </div>
                 <Button asChild variant="secondary" className="gap-2 rounded-full border-ui-border bg-white/[0.06] text-white hover:bg-white/[0.12]">
                   <button type="button" className="no-underline" onClick={goToDashboard}>
                     <ArrowLeft className="h-4 w-4" />
@@ -320,14 +337,14 @@ export default function SpecialFriendPage() {
         <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-4 py-8 text-center sm:px-6">
           <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-white/[0.06] px-4 py-2 text-xs font-semibold tracking-wide text-cyan-100 backdrop-blur">
             <Sparkles className="h-4 w-4" />
-            Independent Special Friend experience
+            Special Friend voice
           </div>
 
           <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl lg:text-5xl">
-            Special Friend
+            Voice Mode Coming Soon
           </h1>
           <p className="mt-3 max-w-2xl text-sm text-slate-300 sm:text-base">
-            A separate AI space with a glowing talking circle, animated voice reaction, and no connection to the chat system.
+            We are polishing the voice experience for Special Friend. For now, please continue in chat mode.
           </p>
 
           <div className="relative my-10 flex items-center justify-center">
@@ -356,17 +373,17 @@ export default function SpecialFriendPage() {
           <div className="flex flex-wrap items-center justify-center gap-3">
             <Button
               type="button"
-              onClick={listening ? stopListening : startListening}
-              aria-pressed={listening}
-              className={cn(
-                'gap-2 rounded-full px-5 py-3 font-semibold text-white shadow-lg transition-transform duration-150 will-change-transform',
-                listening
-                  ? 'bg-gradient-to-r from-red-500 to-rose-600 hover:brightness-110'
-                  : 'bg-gradient-to-r from-cyan-500 to-indigo-600 hover:brightness-110'
-              )}
+              disabled
+              className="gap-2 rounded-full bg-gradient-to-r from-cyan-500/60 to-indigo-600/60 px-5 py-3 font-semibold text-white/80 opacity-80"
             >
-              {listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-              {listening ? 'Stop voice' : 'Start voice'}
+              <MicOff className="h-4 w-4" />
+              Voice coming soon
+            </Button>
+            <Button asChild className="gap-2 rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-600 px-5 py-3 text-white hover:brightness-110">
+              <button type="button" className="no-underline" onClick={() => router.push('/special-friend?mode=chat')}>
+                <MessageCircle className="h-4 w-4" />
+                Go to chat mode
+              </button>
             </Button>
             <Button asChild variant="secondary" className="gap-2 rounded-full border-ui-border bg-white/[0.06] px-5 py-3 text-white hover:bg-white/[0.12]">
               <button type="button" className="no-underline" onClick={goToDashboard}>
@@ -376,13 +393,7 @@ export default function SpecialFriendPage() {
             </Button>
           </div>
 
-          <p className="mt-5 text-sm font-medium text-cyan-100/90">{voiceLabel}</p>
-          <p className="mt-2 text-xs text-slate-400">Status: {status}</p>
-          {error ? (
-            <p className="mt-3 rounded-full border border-red-400/30 bg-red-500/10 px-4 py-2 text-xs font-medium text-red-100">
-              {error}
-            </p>
-          ) : null}
+          <p className="mt-5 text-sm font-medium text-cyan-100/90">Voice support is coming in a future update.</p>
         </div>
       </section>
     </ChatAppShell>
