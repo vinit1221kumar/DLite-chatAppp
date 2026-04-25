@@ -67,6 +67,15 @@ export default function ZegoCallRoomPage() {
     }
   }, [status]);
 
+  const statusTone = useMemo(() => {
+    if (status === "connected") return "text-emerald-700 dark:text-emerald-300";
+    if (status === "error") return "text-rose-700 dark:text-rose-300";
+    if (status === "logging_in" || status === "publishing" || status === "getting_token" || status === "initializing") {
+      return "text-amber-700 dark:text-amber-300";
+    }
+    return "text-slate-700 dark:text-slate-200";
+  }, [status]);
+
   const applyLocalTrackState = useMemo(
     () => (stream: any) => {
       if (!stream) return;
@@ -430,11 +439,19 @@ export default function ZegoCallRoomPage() {
               <span className="font-semibold">{mode === "audio" ? "Audio" : "Video"}</span>
             </p>
           </div>
-          <div className="text-xs text-slate-500 dark:text-slate-400">
-            Status: <span className="font-semibold text-slate-700 dark:text-slate-200">{statusLabel}</span>
+          <div className="flex items-center gap-2">
+            <div className="rounded-full border border-ui-border bg-ui-muted px-3 py-1.5 text-xs">
+              Status: <span className={`font-semibold ${statusTone}`}>{statusLabel}</span>
+            </div>
+            <Link
+              href="/call"
+              className="rounded-full border border-ui-border bg-ui-panel px-3 py-1.5 text-xs font-semibold text-slate-800 transition hover:bg-white dark:text-slate-100 dark:hover:bg-white/10"
+            >
+              Leave
+            </Link>
           </div>
         </div>
-        <div className="mt-3 hidden flex-wrap items-center gap-2 lg:flex">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={toggleMic}
@@ -451,12 +468,6 @@ export default function ZegoCallRoomPage() {
               {isCameraEnabled ? "Turn camera off" : "Turn camera on"}
             </button>
           ) : null}
-          <Link
-            href="/call"
-            className="rounded-full border border-ui-border bg-ui-panel px-3 py-1.5 text-xs font-semibold text-slate-800 transition hover:bg-white dark:text-slate-100 dark:hover:bg-white/10"
-          >
-            Leave call
-          </Link>
         </div>
         {inviteCode ? (
           <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-ui-border bg-ui-muted px-3 py-3">
@@ -530,8 +541,8 @@ export default function ZegoCallRoomPage() {
         ) : null}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 min-h-0">
-        <div className="rounded-2xl border border-ui-border bg-ui-panel p-3 flex flex-col min-h-0">
+      <div className="grid min-h-0 grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <div className="flex min-h-0 flex-col rounded-2xl border border-ui-border bg-ui-panel p-3">
           <div className="mb-2 flex items-center justify-between gap-2 shrink-0">
             <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">You</p>
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
@@ -539,11 +550,15 @@ export default function ZegoCallRoomPage() {
               {mode === "video" ? ` · Camera ${isCameraEnabled ? "on" : "off"}` : ""}
             </p>
           </div>
-          <div id="dlite-zego-local" ref={localRef} className="flex-1 w-full min-h-0 overflow-hidden rounded-xl bg-black/90" />
+          <div
+            id="dlite-zego-local"
+            ref={localRef}
+            className="aspect-video w-full overflow-hidden rounded-xl bg-black/90"
+          />
           {mode === "audio" ? <p className="mt-2 text-[11px] text-slate-500">Audio-only: camera disabled.</p> : null}
         </div>
 
-        <div className="rounded-2xl border border-ui-border bg-ui-panel p-3 flex flex-col min-h-0">
+        <div className="flex min-h-0 flex-col rounded-2xl border border-ui-border bg-ui-panel p-3">
           <div className="mb-2 flex items-center justify-between gap-3 shrink-0">
             <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">Participants</p>
             <span className="text-[11px] text-slate-500 dark:text-slate-400">
@@ -551,11 +566,11 @@ export default function ZegoCallRoomPage() {
             </span>
           </div>
           {remoteTiles.length > 0 ? (
-            <div className="flex-1 w-full min-h-0 grid auto-rows-fr gap-3 overflow-hidden">
+            <div className="grid min-h-0 w-full flex-1 grid-cols-1 gap-3 overflow-y-auto sm:grid-cols-2">
               {remoteTiles.map(({ streamId }) => (
-                <div key={streamId} className="rounded-xl border border-ui-border bg-ui-muted p-2 flex flex-col min-h-0">
-                  <div id={`dlite-zego-remote-${streamId}`} className="flex-1 w-full min-h-0 overflow-hidden rounded-xl bg-black/90" />
-                  <p className="mt-2 truncate text-[11px] text-slate-500 dark:text-slate-400 shrink-0">{streamId}</p>
+                <div key={streamId} className="rounded-xl border border-ui-border bg-ui-muted p-2">
+                  <div id={`dlite-zego-remote-${streamId}`} className="aspect-video w-full overflow-hidden rounded-xl bg-black/90" />
+                  <p className="mt-2 truncate text-[11px] text-slate-500 dark:text-slate-400">{streamId}</p>
                 </div>
               ))}
             </div>

@@ -35,7 +35,8 @@ import {
   subscribeDmTyping,
   pinDmMessage,
   unpinDmMessage,
-  subscribePinnedDmMessages
+  subscribePinnedDmMessages,
+  subscribeThreadUpdated
 } from '../services/chatClient';
 import {
   AtSign,
@@ -952,6 +953,19 @@ export default function ChatDashboardPage() {
       unsubscribe();
     };
   }, [user?.id, recentRefreshTick]);
+
+  useEffect(() => {
+    let unsub = () => undefined;
+    try {
+      unsub = subscribeThreadUpdated(() => {
+        // Trigger a lightweight refresh of the inbox sidebar without full page reload.
+        setRecentRefreshTick((v) => v + 1);
+      });
+    } catch {
+      /* ignore */
+    }
+    return () => unsub();
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user?.id || !activeUserId.trim()) {

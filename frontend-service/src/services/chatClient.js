@@ -123,6 +123,35 @@ function safeUserProfile(userId) {
   return { id, uid: id, username: id || 'User', email: '', photoURL: '' }
 }
 
+function inferFileNameFromUrl(url) {
+  const u = String(url || '').trim()
+  if (!u) return ''
+  try {
+    const parsed = new URL(u)
+    const name = decodeURIComponent(parsed.pathname.split('/').pop() || '')
+    return name || ''
+  } catch {
+    const parts = u.split('?')[0].split('#')[0].split('/')
+    return decodeURIComponent(parts[parts.length - 1] || '')
+  }
+}
+
+function attachMediaFields(message) {
+  const m = message && typeof message === 'object' ? { ...message } : {}
+  const t = String(m.type || 'text').trim().toLowerCase() || 'text'
+  const c = String(m.content || '').trim()
+  const isUrl = /^https?:\/\/\S+$/i.test(c)
+  if (!isUrl) return m
+  if (t === 'image' || t === 'video' || t === 'audio' || t === 'file') {
+    m.mediaType = t
+    m.mediaUrl = c
+    if (!m.fileName && t === 'file') m.fileName = inferFileNameFromUrl(c)
+    // Hide raw URL in message body; UI will render preview instead.
+    m.content = ''
+  }
+  return m
+}
+
 export function initializeMyPresence() {
   let cancelled = false
   let detach = () => undefined
@@ -208,16 +237,18 @@ export async function listDirectMessages() {
   const chatId = String(json?.chatId || '').trim()
   if (!chatId) return []
   const rows = await getMessagesByChatId({ chatId, token: snapshot.token })
-  return rows.map((m) => ({
-    _id: String(m.id || m._id || ''),
-    chatId: m.chat_id || m.chatId || chatId,
-    senderId: m.sender_id || m.senderId || '',
-    content: m.content || '',
-    type: m.type || 'text',
-    createdAt: m.created_at ? Date.parse(m.created_at) : Number(m.createdAt || Date.now()),
-    reactions: m.reactions || {},
-    isDeleted: false,
-  }))
+  return rows.map((m) =>
+    attachMediaFields({
+      _id: String(m.id || m._id || ''),
+      chatId: m.chat_id || m.chatId || chatId,
+      senderId: m.sender_id || m.senderId || '',
+      content: m.content || '',
+      type: m.type || 'text',
+      createdAt: m.created_at ? Date.parse(m.created_at) : Number(m.createdAt || Date.now()),
+      reactions: m.reactions || {},
+      isDeleted: false,
+    })
+  )
 }
 
 export function subscribeDirectMessages(_userId, chatId, callback) {
@@ -251,7 +282,7 @@ export function subscribeDirectMessages(_userId, chatId, callback) {
       const msgChat = String(message.chatId || message.chat_id || '').trim()
       if (msgChat && activeChatId && msgChat !== activeChatId) return
       callback(
-        {
+        attachMediaFields({
           _id: String(message._id || message.id || ''),
           chatId: activeChatId,
           senderId: message.senderId || message.sender_id || '',
@@ -259,7 +290,7 @@ export function subscribeDirectMessages(_userId, chatId, callback) {
           type: message.type || 'text',
           createdAt: Number(message.createdAt || Date.now()),
           isDeleted: false,
-        },
+        }),
         'added'
       )
     }
@@ -393,7 +424,7 @@ export async function sendDirectMessage({ chatId, senderId, content, type }) {
   const savedId = String(saved.id || '').trim()
 
   if (onLocalEvent) {
-    const savedMessage = {
+    const savedMessage = attachMediaFields({
       _id: savedId || optimisticId,
       chatId: realChatId,
       senderId: String(saved.sender_id || sender),
@@ -402,7 +433,7 @@ export async function sendDirectMessage({ chatId, senderId, content, type }) {
       createdAt: saved.created_at ? Date.parse(saved.created_at) : optimisticCreatedAt,
       isDeleted: Boolean(saved.is_deleted),
       isPending: false,
-    }
+    })
     if (savedId && savedId !== optimisticId) {
       onLocalEvent({ changeType: 'removed', message: { _id: optimisticId, chatId: realChatId } })
       onLocalEvent({ changeType: 'added', message: savedMessage })
@@ -699,6 +730,31 @@ export async function listGroupMessages() {
   }))
 }
 
+export async function sendGroupMedia() {
+  const snapshot = await getCurrentAuthSnapshot()
+  if (!snapshot?.token) throw new Error('Not authenticated')
+  const chatId = String(arguments?.[0]?.chatId || arguments?.[0]?.groupId || '').trim()
+  const senderId = String(arguments?.[0]?.senderId || '').trim()
+  const file = arguments?.[0]?.file
+  if (!chatId || !senderId || !file) throw new Error('chatId, senderId, and file are required')
+
+  const fd = new FormData()
+  fd.append('file', file)
+  const r = await fetch(`${API_BASE_URL}/chat/media/upload`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${snapshot.token}` },
+    body: fd,
+  })
+  const j = await r.json().catch(() => ({}))
+  if (!r.ok || j?.success === false) throw new Error(j?.message || 'Could not upload media')
+  const url = String(j?.url || '').trim()
+  const kind = String(j?.type || 'file').trim() || 'file'
+  if (!url) throw new Error('Upload returned empty url')
+
+  // Persist message + broadcast realtime (sendGroupMessage already does best-effort realtime).
+  return await sendGroupMessage({ chatId, content: url, type: kind })
+}
+
 export function subscribeGroupMessages() {
   const chatId = String(arguments?.[0]?.chatId || arguments?.[0]?.groupId || arguments?.[0] || '').trim()
   const cb = typeof arguments?.[1] === 'function' ? arguments[1] : () => undefined
@@ -772,6 +828,38 @@ export function subscribeGroupDeleted(callback) {
       s.off('group_deleted', handler)
       s.off('chat_deleted', handler)
     }
+  })()
+
+  return () => {
+    disposed = true
+    detach()
+  }
+}
+
+export function subscribeGroupMemberRemoved(callback) {
+  const cb = typeof callback === 'function' ? callback : () => undefined
+  let disposed = false
+  let detach = () => undefined
+
+  ;(async () => {
+    const snapshot = await getCurrentAuthSnapshot().catch(() => null)
+    const uid = String(snapshot?.user?.id || '').trim()
+    if (!snapshot?.token || !uid) return
+    let s
+    try {
+      s = await getSocket({ userId: uid })
+    } catch {
+      return
+    }
+    const handler = (payload) => {
+      if (disposed || !payload) return
+      const groupId = String(payload.groupId || payload.chatId || '').trim()
+      const removedUserId = String(payload.userId || payload.removedUserId || '').trim()
+      if (!groupId || !removedUserId) return
+      cb({ groupId, removedUserId })
+    }
+    s.on('group_member_removed', handler)
+    detach = () => s.off('group_member_removed', handler)
   })()
 
   return () => {
@@ -881,6 +969,14 @@ export async function leaveGroupMembership() {
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${snapshot.token}` },
     body: JSON.stringify({ userId: uid }),
   }).catch(() => undefined)
+
+  // Best-effort realtime hint for open clients.
+  try {
+    const s = await getSocket({ userId: uid })
+    s.emit('group_member_removed', { groupId, userId: uid })
+  } catch {
+    /* ignore */
+  }
 }
 export async function removeGroupMember() {
   const snapshot = await getCurrentAuthSnapshot()
@@ -895,6 +991,17 @@ export async function removeGroupMember() {
   })
   const json = await res.json().catch(() => ({}))
   if (!res.ok || json?.success === false) throw new Error(json?.message || 'Could not remove member')
+
+  // Best-effort realtime hint for open clients.
+  try {
+    const uid = String(snapshot?.user?.id || snapshot?.user?.uid || '').trim()
+    if (uid) {
+      const s = await getSocket({ userId: uid })
+      s.emit('group_member_removed', { groupId, userId })
+    }
+  } catch {
+    /* ignore */
+  }
   return json
 }
 export async function setGroupPhoto() {
@@ -1288,6 +1395,37 @@ export function subscribeUserPresence(_userId, callback) {
     unsubRef.delete(cb)
   }
 }
+export function subscribeThreadUpdated(callback) {
+  const cb = typeof callback === 'function' ? callback : () => undefined
+  let disposed = false
+  let detach = () => undefined
+
+  ;(async () => {
+    const snapshot = await getCurrentAuthSnapshot().catch(() => null)
+    const uid = String(snapshot?.user?.id || snapshot?.user?.uid || '').trim()
+    if (!snapshot?.token || !uid) return
+    let s
+    try {
+      s = await getSocket({ userId: uid })
+    } catch {
+      return
+    }
+    const handler = (payload) => {
+      if (disposed || !payload) return
+      const chatId = String(payload.chatId || payload.threadId || payload.groupId || '').trim()
+      if (!chatId) return
+      cb({ chatId })
+    }
+    s.on('thread_updated', handler)
+    detach = () => s.off('thread_updated', handler)
+  })()
+
+  return () => {
+    disposed = true
+    detach()
+  }
+}
+
 export async function markRecentDirectChatRead() {
   const snapshot = await getCurrentAuthSnapshot()
   if (!snapshot?.token) return

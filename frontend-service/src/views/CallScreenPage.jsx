@@ -200,7 +200,7 @@ export default function CallScreenPage() {
             description="Pick a user and start a call."
             theme="enhanced"
             showUserPanel={false}
-            requireExplicitStart
+            requireExplicitStart={false}
             showHero={false}
           />
         ) : null}

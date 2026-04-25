@@ -14,6 +14,7 @@ from src.supabase import validate_access_token
 # Short TTL cache to avoid PostgREST on every typing event (membership rarely changes).
 _MEMBER_CACHE_TTL_SEC = 45.0
 _member_ok_cache: dict[tuple[str, str], tuple[float, bool]] = {}
+_member_list_cache: dict[tuple[str, str], tuple[float, list[str]]] = {}
 
 
 async def _user_is_chat_member(chat_id: str, user_id: str, access_token: str) -> bool:
@@ -49,6 +50,38 @@ async def _user_is_chat_member(chat_id: str, user_id: str, access_token: str) ->
     ttl = _MEMBER_CACHE_TTL_SEC if ok else 2.0
     _member_ok_cache[cache_key] = (now + ttl, ok)
     return ok
+
+
+async def _list_chat_member_ids(chat_id: str, access_token: str) -> list[str]:
+    """
+    Best-effort list of member user_ids for a chat (RLS enforced by caller JWT).
+    Used to notify user rooms so sidebars update without joining the chat room.
+    """
+    cid = (chat_id or "").strip()
+    tok = (access_token or "").strip()
+    if not cid or not tok or not SUPABASE_URL or not SUPABASE_ANON_KEY:
+        return []
+    now = time.monotonic()
+    cache_key = (cid, tok[:12])  # avoid storing full token in key
+    hit = _member_list_cache.get(cache_key)
+    if hit and now < hit[0]:
+        return hit[1]
+    url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/group_members"
+    params = {"select": "user_id", "chat_id": f"eq.{cid}", "limit": "200"}
+    headers = {"apikey": SUPABASE_ANON_KEY, "authorization": f"Bearer {tok}", "content-type": "application/json"}
+    out: list[str] = []
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            r = await client.get(url, headers=headers, params=params)
+        if r.status_code < 400:
+            rows = r.json()
+            if isinstance(rows, list):
+                out = [str((row or {}).get("user_id") or "").strip() for row in rows]
+                out = [x for x in out if x]
+    except Exception:
+        out = []
+    _member_list_cache[cache_key] = (now + 10.0, out)
+    return out
 
 
 async def _persist_presence_row(user_id: str, status: str, access_token: Optional[str]) -> None:
@@ -222,7 +255,17 @@ def create_socket_app(*, cors_allowed_origins: list[str] | str, other_asgi_app=N
                 "createdAt": created_at,
             },
             room=chat_room(chat_id),
+            skip_sid=sid,
         )
+
+        # Also notify all members' user rooms so inbox/group lists can refresh without full reload.
+        try:
+            member_ids = await _list_chat_member_ids(chat_id, str(access_token))
+            payload = {"chatId": chat_id}
+            for mid in sorted(set(member_ids)):
+                await sio.emit("thread_updated", payload, room=user_room(mid))
+        except Exception:
+            pass
 
     @sio.event
     async def message_updated(sid, data):
@@ -268,6 +311,30 @@ def create_socket_app(*, cors_allowed_origins: list[str] | str, other_asgi_app=N
         payload = {"groupId": group_id}
         for mid in sorted(set(member_ids)):
             await sio.emit("group_deleted", payload, room=user_room(mid))
+
+    @sio.event
+    async def group_member_removed(sid, data):
+        """
+        Notify clients that a member was removed from a group.
+        Security: we only verify the sender is a member of the chat; the actual removal is enforced in core-backend.
+        Payload: { groupId/chatId, userId/removedUserId }.
+        """
+        session = await sio.get_session(sid)
+        actor_id = (session or {}).get("userId")
+        access_token = (session or {}).get("accessToken")
+        if not actor_id or not access_token:
+            return
+        group_id = str((data or {}).get("groupId") or (data or {}).get("chatId") or "").strip()
+        removed_id = str((data or {}).get("userId") or (data or {}).get("removedUserId") or "").strip()
+        if not group_id or not removed_id:
+            return
+        if not await _user_is_chat_member(group_id, str(actor_id), str(access_token)):
+            return
+        payload = {"groupId": group_id, "userId": removed_id, "removedUserId": removed_id}
+        # Update everyone currently viewing the group
+        await sio.emit("group_member_removed", payload, room=chat_room(group_id))
+        # Ensure the removed user gets the event even if not in the room
+        await sio.emit("group_member_removed", payload, room=user_room(removed_id))
 
     @sio.event
     async def reaction_updated(sid, data):

@@ -20,10 +20,13 @@ import {
   listUserGroups,
   markGroupThreadRead,
   sendGroupMessage as sendChatGroupMessage,
+  sendGroupMedia as sendChatGroupMedia,
   setGroupMemberRole,
   setGroupMuted,
   subscribeGroupMessages,
   subscribeGroupDeleted,
+  subscribeGroupMemberRemoved,
+  subscribeThreadUpdated,
   toggleGroupReaction,
   setGroupTyping,
   subscribeGroupTyping,
@@ -125,6 +128,7 @@ export default function GroupChatPage() {
   const groupTypingTimeoutRef = useRef(null);
   const groupPhotoInputRef = useRef(null);
   const groupComposerRef = useRef(null);
+  const groupMediaInputRef = useRef(null);
   const messagesWrapRef = useRef(null);
   const shouldAutoScrollRef = useRef(false);
   const lastGroupMessageCountRef = useRef(0);
@@ -203,6 +207,9 @@ export default function GroupChatPage() {
         const bubble = mine ? 'chat-bubble-sent' : 'chat-bubble-received';
         const iconMine = 'text-white/90 hover:bg-white/15';
         const iconTheirs = 'text-slate-600 hover:bg-slate-200/80 dark:text-slate-300 dark:hover:bg-slate-700/50';
+        const msgType = String(m.type || 'text');
+        const rawContent = String(m.content || m.message || '');
+        const isHttpUrl = /^https?:\/\/\S+$/i.test(rawContent.trim());
 
         return (
           <div className={cn('group flex w-full flex-col', mine ? 'items-end' : 'items-start')}>
@@ -276,7 +283,39 @@ export default function GroupChatPage() {
                         mine && 'text-white [&_a]:text-white/90 [&_a]:underline'
                       )}
                     >
-                      {linkifyGroupMessage(m.message)}
+                      {msgType === 'image' && isHttpUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={rawContent}
+                          alt="Image"
+                          className="mt-1 max-h-72 w-auto max-w-full rounded-xl border border-white/10 object-contain"
+                          loading="lazy"
+                        />
+                      ) : msgType === 'video' && isHttpUrl ? (
+                        <video
+                          src={rawContent}
+                          controls
+                          className="mt-1 max-h-72 w-auto max-w-full rounded-xl border border-white/10"
+                        />
+                      ) : msgType === 'audio' && isHttpUrl ? (
+                        <audio src={rawContent} controls className="mt-1 w-full max-w-xs" />
+                      ) : msgType === 'file' && isHttpUrl ? (
+                        <a
+                          href={rawContent}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={cn(
+                            'inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium',
+                            mine
+                              ? 'border-white/15 bg-white/10 text-white hover:bg-white/15'
+                              : 'border-ui-border bg-ui-panel text-slate-800 hover:bg-ui-muted dark:text-slate-100'
+                          )}
+                        >
+                          <span className="truncate">Open file</span>
+                        </a>
+                      ) : (
+                        linkifyGroupMessage(m.message)
+                      )}
                     </div>
                   </div>
 
@@ -715,6 +754,19 @@ export default function GroupChatPage() {
   }, [loadUserGroups, groupsRefreshTick]);
 
   useEffect(() => {
+    let unsub = () => undefined;
+    try {
+      unsub = subscribeThreadUpdated(() => {
+        // Refresh group list (e.g., last activity / membership changes) without full reload.
+        setGroupsRefreshTick((v) => v + 1);
+      });
+    } catch {
+      /* ignore */
+    }
+    return () => unsub();
+  }, [user?.id]);
+
+  useEffect(() => {
     let unsubscribe = () => undefined;
     try {
       unsubscribe = subscribeGroupDeleted((payload) => {
@@ -738,6 +790,35 @@ export default function GroupChatPage() {
     }
     return () => unsubscribe();
   }, [groupId, loadUserGroups]);
+
+  useEffect(() => {
+    let unsub = () => undefined;
+    try {
+      unsub = subscribeGroupMemberRemoved(async ({ groupId: evGroupId, removedUserId }) => {
+        const active = groupId.trim();
+        if (!evGroupId) return;
+        // If I'm removed from the currently open group, close it immediately.
+        if (active && evGroupId === active && removedUserId === user?.id) {
+          setPanelSuccess('You were removed from the group.');
+          setGroupId('');
+          setGroupInput('');
+          setMessages([]);
+          setGroupMembers([]);
+          setGroupMenuOpen(false);
+          setMembersModalOpen(false);
+          setGroupPhotoUrl('');
+        }
+        // Refresh lists/members to reflect updated status without manual refresh.
+        if (active && evGroupId === active) {
+          await loadGroupMembers(active);
+        }
+        await loadUserGroups();
+      });
+    } catch {
+      /* ignore */
+    }
+    return () => unsub();
+  }, [groupId, user?.id, loadGroupMembers, loadUserGroups]);
 
   useEffect(() => {
     loadGroupMembers(groupId);
@@ -849,6 +930,23 @@ export default function GroupChatPage() {
       }
     } catch (err) {
       setPanelError(err?.message || 'Could not send message.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handlePickGroupMedia = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !user?.id || !groupId.trim()) return;
+    setSending(true);
+    setPanelError('');
+    setPanelSuccess('');
+    try {
+      await sendChatGroupMedia({ groupId: groupId.trim(), chatId: groupId.trim(), senderId: user.id, file });
+      setPanelSuccess('Media sent.');
+    } catch (err) {
+      setPanelError(err?.message || 'Could not send media.');
     } finally {
       setSending(false);
     }
@@ -1575,24 +1673,8 @@ export default function GroupChatPage() {
               )}
             </div>
 
-            <div className="absolute bottom-4 right-4 z-20 flex items-center gap-2">
-              <button
-                type="button"
-                onClick={scrollGroupMessagesUp}
-                className="rounded-full border border-ui-border bg-ui-panel px-3 py-2 text-xs font-medium text-slate-700 shadow-lg shadow-black/10 backdrop-blur hover:border-ui-accent hover:text-ui-accent dark:text-slate-100"
-                aria-label="Scroll up"
-              >
-                ↑
-              </button>
-              <button
-                type="button"
-                onClick={scrollGroupMessagesDown}
-                className="rounded-full border border-ui-border bg-ui-panel px-3 py-2 text-xs font-medium text-slate-700 shadow-lg shadow-black/10 backdrop-blur hover:border-ui-accent hover:text-ui-accent dark:text-slate-100"
-                aria-label="Scroll down"
-              >
-                ↓
-              </button>
-              {pendingGroupScrollCount > 0 && (
+            {pendingGroupScrollCount > 0 && (
+              <div className="absolute bottom-4 right-4 z-20 flex items-center gap-2">
                 <button
                   type="button"
                   onClick={scrollGroupMessagesToLatest}
@@ -1601,8 +1683,8 @@ export default function GroupChatPage() {
                 >
                   {pendingGroupScrollCount} new message{pendingGroupScrollCount > 1 ? 's' : ''}
                 </button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           {/* Typing indicator */}
@@ -1620,6 +1702,12 @@ export default function GroupChatPage() {
           >
             <div className="mx-auto flex max-w-4xl items-end gap-1">
               <div className="flex min-h-[48px] min-w-0 flex-1 items-end gap-0.5 rounded-[1.35rem] border border-ui-border bg-ui-composer-pill px-1 py-1 shadow-sm">
+                <input
+                  ref={groupMediaInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={handlePickGroupMedia}
+                />
                 <button
                   type="button"
                   className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-200/90 disabled:opacity-40 dark:text-slate-300 dark:hover:bg-slate-700/80"
@@ -1629,6 +1717,16 @@ export default function GroupChatPage() {
                   onClick={() => groupComposerRef.current?.focus()}
                 >
                   <SmilePlus className="h-[22px] w-[22px]" />
+                </button>
+                <button
+                  type="button"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-200/90 disabled:opacity-40 dark:text-slate-300 dark:hover:bg-slate-700/80"
+                  title="Attach media"
+                  aria-label="Attach media"
+                  disabled={!groupId.trim() || !isMember || sending}
+                  onClick={() => groupMediaInputRef.current?.click()}
+                >
+                  <Upload className="h-[22px] w-[22px]" />
                 </button>
                 <textarea
                   ref={groupComposerRef}
