@@ -142,11 +142,11 @@ export function ChatAppIconRail({
           <Link
             href="/special-friend"
             className={cn(
-              // Match the nav buttons’ footprint so it aligns perfectly.
-              'pointer-events-auto relative inline-flex min-h-[3.25rem] w-[4.25rem] items-center justify-center gap-1 overflow-hidden rounded-2xl border border-violet-300/45',
-              'bg-gradient-to-r from-violet-600 via-indigo-600 to-fuchsia-600 px-2 py-1.5 text-[10px] font-semibold leading-tight text-white',
-              'shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_12px_36px_-20px_rgba(99,102,241,0.75)] ring-1 ring-white/15 transition duration-200',
-              'hover:-translate-y-0.5 hover:brightness-110 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.12),0_16px_42px_-18px_rgba(99,102,241,0.9)]',
+              // Use the same icon+label vertical layout as others (fixes cramped pill).
+              'relative flex min-h-[3.25rem] w-[4.25rem] flex-col items-center justify-center gap-0.5 overflow-hidden rounded-2xl border border-violet-300/45',
+              'bg-gradient-to-r from-violet-600 via-indigo-600 to-fuchsia-600 px-1.5 py-1.5 text-white',
+              'shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_12px_36px_-20px_rgba(99,102,241,0.7)] ring-1 ring-white/15 transition duration-200',
+              'hover:-translate-y-0.5 hover:brightness-110 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.12),0_16px_42px_-18px_rgba(99,102,241,0.85)]',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/70 motion-safe:animate-pulse'
             )}
             aria-label="Open Special Friend"
@@ -154,8 +154,10 @@ export function ChatAppIconRail({
             title="Special Friend"
           >
             <span className="absolute inset-0 bg-white/10 opacity-70 blur-xl" aria-hidden="true" />
-            <Sparkles className="relative z-10 h-4 w-4 shrink-0" aria-hidden="true" />
-            <span className="relative z-10 whitespace-nowrap">Special</span>
+            <Sparkles className="relative z-10 h-5 w-5 shrink-0" aria-hidden="true" />
+            <span className="relative z-10 max-w-full truncate text-center text-[10px] font-semibold leading-tight">
+              Special
+            </span>
           </Link>
         </div>
       </div>
