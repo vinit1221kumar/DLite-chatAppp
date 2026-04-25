@@ -918,15 +918,23 @@ export default function CallUI({
           )}
         >
           {activeMode === "video" ? (
-            <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-2 p-3 sm:gap-3 sm:p-4">
-              <div className="relative col-span-2 row-span-2 overflow-hidden rounded-[1.5rem] bg-black ring-1 ring-white/10">
-                <video ref={overlayVideoRef} autoPlay playsInline className="absolute inset-0 h-full w-full object-cover" />
-                <div className="pointer-events-none absolute inset-0 bg-black/10" aria-hidden="true" />
-              </div>
+            <div className="absolute inset-0 flex flex-col gap-3 p-3 sm:gap-4 sm:p-4">
+              <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2">
+                <div className="relative min-h-0 overflow-hidden rounded-[1.5rem] bg-black ring-1 ring-white/10">
+                  <video ref={overlayVideoRef} autoPlay playsInline className="h-full w-full object-cover" />
+                  <div className="pointer-events-none absolute inset-0 bg-black/10" aria-hidden="true" />
+                  <div className="pointer-events-none absolute left-3 top-3 rounded-full bg-black/45 px-2.5 py-1 text-[11px] font-semibold text-white/90 ring-1 ring-white/10">
+                    {peerDisplayName || peerId || "Remote"}
+                  </div>
+                </div>
 
-              {/* Local small tile (WhatsApp-like) */}
-              <div className="pointer-events-none absolute right-4 top-24 z-20 h-28 w-20 overflow-hidden rounded-2xl border border-white/20 bg-black shadow-2xl sm:right-6 sm:top-28 sm:h-36 sm:w-24">
-                <video ref={localVideoRef} autoPlay muted playsInline className="h-full w-full object-cover" />
+                <div className="relative min-h-0 overflow-hidden rounded-[1.5rem] bg-black ring-1 ring-white/10">
+                  <video ref={localVideoRef} autoPlay muted playsInline className="h-full w-full object-cover" />
+                  <div className="pointer-events-none absolute inset-0 bg-black/10" aria-hidden="true" />
+                  <div className="pointer-events-none absolute left-3 top-3 rounded-full bg-black/45 px-2.5 py-1 text-[11px] font-semibold text-white/90 ring-1 ring-white/10">
+                    You
+                  </div>
+                </div>
               </div>
             </div>
           ) : (
@@ -997,7 +1005,7 @@ export default function CallUI({
             </div>
           )}
 
-          {/* local tile moved into the video grid above */}
+          {/* video tiles */}
 
           <div className="relative z-10 mt-auto flex items-center justify-center px-6 pb-10 pt-6">
             {status === "idle" ? (
@@ -1033,59 +1041,42 @@ export default function CallUI({
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-6">
-                {/* Left control: camera for video, otherwise mic */}
+              <div className="flex items-center gap-2 rounded-full bg-black/35 px-3 py-2 ring-1 ring-white/10 backdrop-blur">
                 {activeMode === "video" ? (
                   <button
                     type="button"
                     onClick={toggleCamera}
                     disabled={!canToggleCamera}
                     className={cn(
-                      "flex h-16 w-16 items-center justify-center rounded-full bg-white text-slate-900 shadow-2xl transition",
+                      "flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20",
                       !canToggleCamera && "opacity-60"
                     )}
                     aria-label={cameraEnabled ? "Camera off" : "Camera on"}
                     title={cameraEnabled ? "Camera" : "Camera off"}
                   >
-                    {cameraEnabled ? <Video className="h-7 w-7" /> : <VideoOff className="h-7 w-7" />}
+                    {cameraEnabled ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
                   </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={toggleMic}
-                    className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-slate-900 shadow-2xl"
-                    aria-label={micEnabled ? "Mute" : "Unmute"}
-                    title={micEnabled ? "Microphone" : "Microphone off"}
-                  >
-                    {micEnabled ? <Mic className="h-7 w-7" /> : <MicOff className="h-7 w-7" />}
-                  </button>
-                )}
+                ) : null}
 
-                {/* Center: hang up */}
+                <button
+                  type="button"
+                  onClick={toggleMic}
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
+                  aria-label={micEnabled ? "Mute" : "Unmute"}
+                  title={micEnabled ? "Microphone" : "Microphone off"}
+                >
+                  {micEnabled ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
+                </button>
+
                 <button
                   type="button"
                   onClick={leaveCall}
-                  className="flex h-16 w-16 items-center justify-center rounded-full bg-red-500 text-white shadow-2xl hover:bg-red-600"
+                  className="flex h-10 w-12 items-center justify-center rounded-full bg-red-500 text-white shadow-lg shadow-red-500/20 transition hover:bg-red-600"
                   aria-label="End call"
                   title="End call"
                 >
-                  <PhoneOff className="h-7 w-7" />
+                  <PhoneOff className="h-5 w-5" />
                 </button>
-
-                {/* Right control: mic for video, otherwise spacer */}
-                {activeMode === "video" ? (
-                  <button
-                    type="button"
-                    onClick={toggleMic}
-                    className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-slate-900 shadow-2xl"
-                    aria-label={micEnabled ? "Mute" : "Unmute"}
-                    title={micEnabled ? "Microphone" : "Microphone off"}
-                  >
-                    {micEnabled ? <Mic className="h-7 w-7" /> : <MicOff className="h-7 w-7" />}
-                  </button>
-                ) : (
-                  <div className="h-16 w-16" aria-hidden />
-                )}
               </div>
             )}
 
