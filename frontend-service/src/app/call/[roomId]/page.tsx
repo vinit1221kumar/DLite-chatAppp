@@ -6,6 +6,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { ZegoExpressEngine } from "zego-express-engine-webrtc";
 import { useAuth } from "@/hooks/useAuth";
 import { buildHostedCallUrl, getInviteCodeFromRoomId } from "@/lib/callRoom";
+import { cn } from "@/lib/utils";
 
 type RemoteTile = { streamId: string };
 
@@ -435,7 +436,7 @@ export default function ZegoCallRoomPage() {
           <div>
             <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Call room</p>
             <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-              Room: <span className="font-mono">{roomId}</span> · Mode:{" "}
+              Mode:{" "}
               <span className="font-semibold">{mode === "audio" ? "Audio" : "Video"}</span>
             </p>
           </div>
@@ -445,7 +446,7 @@ export default function ZegoCallRoomPage() {
             </div>
             <Link
               href="/call"
-              className="rounded-full border border-ui-border bg-ui-panel px-3 py-1.5 text-xs font-semibold text-slate-800 transition hover:bg-white dark:text-slate-100 dark:hover:bg-white/10"
+              className="anim-shimmer relative inline-flex items-center justify-center overflow-hidden rounded-full bg-gradient-to-r from-fuchsia-600 via-violet-600 to-orange-500 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-fuchsia-500/15 ring-1 ring-white/15 transition hover:-translate-y-0.5 hover:brightness-110"
             >
               Leave
             </Link>
@@ -455,7 +456,12 @@ export default function ZegoCallRoomPage() {
           <button
             type="button"
             onClick={toggleMic}
-            className="rounded-full border border-ui-border bg-ui-panel px-3 py-1.5 text-xs font-semibold text-slate-800 transition hover:bg-white dark:text-slate-100 dark:hover:bg-white/10"
+            className={cn(
+              "anim-shimmer relative inline-flex items-center justify-center overflow-hidden rounded-full px-3 py-1.5 text-xs font-semibold text-white shadow-lg ring-1 ring-white/15 transition hover:-translate-y-0.5 hover:brightness-110",
+              isMicEnabled
+                ? "bg-gradient-to-r from-fuchsia-600 via-violet-600 to-orange-500 shadow-fuchsia-500/15"
+                : "bg-gradient-to-r from-slate-600 via-slate-700 to-slate-800 shadow-black/10"
+            )}
           >
             {isMicEnabled ? "Mute mic" : "Unmute mic"}
           </button>
@@ -463,7 +469,12 @@ export default function ZegoCallRoomPage() {
             <button
               type="button"
               onClick={toggleCamera}
-              className="rounded-full border border-ui-border bg-ui-panel px-3 py-1.5 text-xs font-semibold text-slate-800 transition hover:bg-white dark:text-slate-100 dark:hover:bg-white/10"
+              className={cn(
+                "anim-shimmer relative inline-flex items-center justify-center overflow-hidden rounded-full px-3 py-1.5 text-xs font-semibold text-white shadow-lg ring-1 ring-white/15 transition hover:-translate-y-0.5 hover:brightness-110",
+                isCameraEnabled
+                  ? "bg-gradient-to-r from-fuchsia-600 via-violet-600 to-orange-500 shadow-fuchsia-500/15"
+                  : "bg-gradient-to-r from-slate-600 via-slate-700 to-slate-800 shadow-black/10"
+              )}
             >
               {isCameraEnabled ? "Turn camera off" : "Turn camera on"}
             </button>
@@ -481,7 +492,7 @@ export default function ZegoCallRoomPage() {
             </div>
             <button
               type="button"
-              className="rounded-full border border-ui-border bg-ui-panel px-3 py-1.5 text-xs font-semibold text-slate-800 transition hover:bg-white dark:text-slate-100 dark:hover:bg-white/10"
+              className="anim-shimmer relative inline-flex items-center justify-center overflow-hidden rounded-full bg-gradient-to-r from-fuchsia-600 via-violet-600 to-orange-500 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-fuchsia-500/15 ring-1 ring-white/15 transition hover:-translate-y-0.5 hover:brightness-110"
               onClick={async () => {
                 try {
                   await navigator.clipboard.writeText(inviteCode);
@@ -495,7 +506,7 @@ export default function ZegoCallRoomPage() {
             </button>
             <button
               type="button"
-              className="rounded-full border border-ui-border bg-ui-panel px-3 py-1.5 text-xs font-semibold text-slate-800 transition hover:bg-white dark:text-slate-100 dark:hover:bg-white/10"
+              className="anim-shimmer relative inline-flex items-center justify-center overflow-hidden rounded-full bg-gradient-to-r from-fuchsia-600 via-violet-600 to-orange-500 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-fuchsia-500/15 ring-1 ring-white/15 transition hover:-translate-y-0.5 hover:brightness-110"
               onClick={async () => {
                 try {
                   const absoluteLink =
@@ -570,7 +581,6 @@ export default function ZegoCallRoomPage() {
               {remoteTiles.map(({ streamId }) => (
                 <div key={streamId} className="rounded-xl border border-ui-border bg-ui-muted p-2">
                   <div id={`dlite-zego-remote-${streamId}`} className="aspect-video w-full overflow-hidden rounded-xl bg-black/90" />
-                  <p className="mt-2 truncate text-[11px] text-slate-500 dark:text-slate-400">{streamId}</p>
                 </div>
               ))}
             </div>
