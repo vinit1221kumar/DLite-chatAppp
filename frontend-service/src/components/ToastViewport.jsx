@@ -2,6 +2,7 @@
  
  import { X } from 'lucide-react';
  import { createPortal } from 'react-dom';
+import { useEffect, useState } from 'react';
  import { useToasts } from '@/context/ToastContext';
  import { cn } from '@/lib/utils';
  
@@ -14,7 +15,13 @@
  
  export function ToastViewport() {
    const { toasts, removeToast } = useToasts();
-   if (typeof document === 'undefined') return null;
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted || typeof document === 'undefined') return null;
  
    const node = (
      <div className="pointer-events-none fixed bottom-4 right-4 z-[300] flex w-[min(92vw,360px)] flex-col gap-2">

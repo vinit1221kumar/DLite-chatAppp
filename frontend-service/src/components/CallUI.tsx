@@ -952,10 +952,28 @@ export default function CallUI({
           {activeMode !== "video" && (
             <div className="relative z-10 flex min-h-0 flex-1 items-center justify-center px-6">
               <div className="flex flex-col items-center gap-4">
-                <div className="flex h-28 w-28 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-white/10">
-                  <span className="text-5xl font-bold">
-                    {(peerDisplayName || peerId || "?").slice(0, 1).toUpperCase()}
-                  </span>
+                <div
+                  className={cn(
+                    "relative flex h-32 w-32 items-center justify-center overflow-hidden rounded-full ring-1",
+                    "ring-white/15"
+                  )}
+                  style={{
+                    background:
+                      "radial-gradient(circle at top, color-mix(in srgb, var(--ui-grad-from) 35%, transparent) 0%, transparent 55%)," +
+                      "radial-gradient(circle at bottom, color-mix(in srgb, var(--ui-grad-to) 30%, transparent) 0%, transparent 60%)," +
+                      "linear-gradient(145deg, color-mix(in srgb, var(--ui-canvas) 78%, black), color-mix(in srgb, var(--ui-panel) 70%, black))",
+                  }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
+                      peerDisplayName || peerId || "user"
+                    )}`}
+                    alt=""
+                    className="h-full w-full object-cover"
+                    draggable={false}
+                  />
+                  <div className="pointer-events-none absolute inset-0 bg-black/10" aria-hidden="true" />
                 </div>
                 <p className="text-lg font-semibold text-white">{peerDisplayName || peerId || "Waiting"}</p>
                 <p className="text-sm text-white/70">{status === "connected" ? "Voice call" : getStatusLabel(status)}</p>

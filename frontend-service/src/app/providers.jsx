@@ -6,10 +6,18 @@ import { AuthProvider } from '@/context/AuthContext';
 import { SocketProvider } from '@/context/SocketContext';
 import { IncomingCallProvider } from '@/context/IncomingCallContext';
 import { ToastProvider } from '@/context/ToastContext';
-import { ToastViewport } from '@/components/ToastViewport';
-import InAppNotificationListener from '@/components/InAppNotificationListener';
 
 const IncomingCallOverlay = dynamic(() => import('@/components/IncomingCallOverlay'), {
+  ssr: false,
+  loading: () => null,
+});
+
+const ToastViewport = dynamic(() => import('@/components/ToastViewport').then((m) => m.ToastViewport), {
+  ssr: false,
+  loading: () => null,
+});
+
+const InAppNotificationListener = dynamic(() => import('@/components/InAppNotificationListener'), {
   ssr: false,
   loading: () => null,
 });
