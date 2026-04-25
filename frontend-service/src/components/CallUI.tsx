@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
+  ArrowLeft,
   Maximize2,
   Mic,
   MicOff,
@@ -929,6 +930,15 @@ export default function CallUI({
             <div className="flex items-center gap-2">
               <button
                 type="button"
+                onClick={() => router.back()}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-sm hover:bg-white/20"
+                aria-label="Back"
+                title="Back"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
                 onClick={toggleBrowserFullscreen}
                 className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-sm hover:bg-white/20"
                 aria-label={isBrowserFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
@@ -960,97 +970,110 @@ export default function CallUI({
           )}
 
           <div className="relative z-10 mt-auto flex items-center justify-center px-6 pb-10 pt-6">
-            <div className="flex items-center justify-center gap-4 rounded-full bg-black/45 px-4 py-3 backdrop-blur">
-              {status === "idle" && (
+            {status === "idle" ? (
+              <button
+                type="button"
+                onClick={beginCall}
+                disabled={isBusy || !currentUserId}
+                className={cn(
+                  "flex h-16 w-16 items-center justify-center rounded-full text-white shadow-2xl transition",
+                  isBusy ? "bg-white/15" : "bg-emerald-500 hover:bg-emerald-600"
+                )}
+                aria-label="Start call"
+              >
+                <PhoneCall className="h-7 w-7" />
+              </button>
+            ) : status === "ringing" && hasIncomingCall ? (
+              <div className="flex items-center gap-6">
                 <button
                   type="button"
-                  onClick={beginCall}
-                  disabled={isBusy || !currentUserId}
-                  className={cn(
-                    "flex h-14 w-14 items-center justify-center rounded-full text-white shadow-lg transition",
-                    isBusy ? "bg-white/15" : "bg-emerald-500 hover:bg-emerald-600"
-                  )}
-                  aria-label="Start call"
+                  onClick={rejectIncomingCall}
+                  className="flex h-16 w-16 items-center justify-center rounded-full bg-rose-500 text-white shadow-2xl hover:bg-rose-600"
+                  aria-label="Reject"
                 >
-                  <PhoneCall className="h-6 w-6" />
+                  <PhoneOff className="h-7 w-7" />
                 </button>
-              )}
-
-              {status !== "idle" && (
-                <>
+                <button
+                  type="button"
+                  onClick={acceptIncomingCall}
+                  className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500 text-white shadow-2xl hover:bg-emerald-600"
+                  aria-label="Accept"
+                >
+                  <PhoneIncoming className="h-7 w-7" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-6">
+                {/* Left control: camera for video, otherwise mic */}
+                {activeMode === "video" ? (
+                  <button
+                    type="button"
+                    onClick={toggleCamera}
+                    disabled={!canToggleCamera}
+                    className={cn(
+                      "flex h-16 w-16 items-center justify-center rounded-full bg-white text-slate-900 shadow-2xl transition",
+                      !canToggleCamera && "opacity-60"
+                    )}
+                    aria-label={cameraEnabled ? "Camera off" : "Camera on"}
+                    title={cameraEnabled ? "Camera" : "Camera off"}
+                  >
+                    {cameraEnabled ? <Video className="h-7 w-7" /> : <VideoOff className="h-7 w-7" />}
+                  </button>
+                ) : (
                   <button
                     type="button"
                     onClick={toggleMic}
-                    className={cn(
-                      "flex h-12 w-12 items-center justify-center rounded-full text-white transition-colors",
-                      micEnabled ? "bg-white/15 hover:bg-white/25" : "bg-red-500 hover:bg-red-600"
-                    )}
+                    className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-slate-900 shadow-2xl"
                     aria-label={micEnabled ? "Mute" : "Unmute"}
+                    title={micEnabled ? "Microphone" : "Microphone off"}
                   >
-                    {micEnabled ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
+                    {micEnabled ? <Mic className="h-7 w-7" /> : <MicOff className="h-7 w-7" />}
                   </button>
-                  {activeMode === "video" && (
-                    <button
-                      type="button"
-                      onClick={toggleCamera}
-                      disabled={!canToggleCamera}
-                      className={cn(
-                        "flex h-12 w-12 items-center justify-center rounded-full text-white transition-colors",
-                        cameraEnabled ? "bg-white/15 hover:bg-white/25" : "bg-slate-600 hover:bg-slate-700"
-                      )}
-                      aria-label={cameraEnabled ? "Camera off" : "Camera on"}
-                    >
-                      {cameraEnabled ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
-                    </button>
-                  )}
-                  {activeMode === "video" && (
-                    <button
-                      type="button"
-                      onClick={toggleScreenShare}
-                      className={cn(
-                        "flex h-12 w-12 items-center justify-center rounded-full text-white transition-colors",
-                        isScreenSharing ? "bg-ui-accent hover:brightness-110" : "bg-white/15 hover:bg-white/25"
-                      )}
-                      aria-label={isScreenSharing ? "Stop sharing" : "Share screen"}
-                    >
-                      {isScreenSharing ? <MonitorOff className="h-5 w-5" /> : <Monitor className="h-5 w-5" />}
-                    </button>
-                  )}
-                </>
-              )}
+                )}
 
-              {status === "ringing" && hasIncomingCall && (
-                <>
-                  <button
-                    type="button"
-                    onClick={acceptIncomingCall}
-                    className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg hover:bg-emerald-600"
-                    aria-label="Accept"
-                  >
-                    <PhoneIncoming className="h-5 w-5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={rejectIncomingCall}
-                    className="flex h-12 w-12 items-center justify-center rounded-full bg-rose-500 text-white shadow-lg hover:bg-rose-600"
-                    aria-label="Reject"
-                  >
-                    <PhoneOff className="h-5 w-5" />
-                  </button>
-                </>
-              )}
-
-              {status !== "idle" && (
+                {/* Center: hang up */}
                 <button
                   type="button"
                   onClick={leaveCall}
-                  className="flex h-14 w-14 items-center justify-center rounded-full bg-red-500 text-white shadow-lg hover:bg-red-600"
+                  className="flex h-16 w-16 items-center justify-center rounded-full bg-red-500 text-white shadow-2xl hover:bg-red-600"
                   aria-label="End call"
+                  title="End call"
                 >
-                  <PhoneOff className="h-6 w-6" />
+                  <PhoneOff className="h-7 w-7" />
                 </button>
-              )}
-            </div>
+
+                {/* Right control: mic for video, otherwise spacer */}
+                {activeMode === "video" ? (
+                  <button
+                    type="button"
+                    onClick={toggleMic}
+                    className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-slate-900 shadow-2xl"
+                    aria-label={micEnabled ? "Mute" : "Unmute"}
+                    title={micEnabled ? "Microphone" : "Microphone off"}
+                  >
+                    {micEnabled ? <Mic className="h-7 w-7" /> : <MicOff className="h-7 w-7" />}
+                  </button>
+                ) : (
+                  <div className="h-16 w-16" aria-hidden />
+                )}
+              </div>
+            )}
+
+            {/* Optional screen-share: keep functionality but avoid cluttering the main 3 buttons */}
+            {activeMode === "video" && status !== "idle" ? (
+              <button
+                type="button"
+                onClick={toggleScreenShare}
+                className={cn(
+                  "absolute bottom-12 right-6 flex h-10 w-10 items-center justify-center rounded-full text-white backdrop-blur-sm transition",
+                  isScreenSharing ? "bg-ui-accent hover:brightness-110" : "bg-white/15 hover:bg-white/25"
+                )}
+                aria-label={isScreenSharing ? "Stop sharing" : "Share screen"}
+                title={isScreenSharing ? "Stop sharing" : "Share screen"}
+              >
+                {isScreenSharing ? <MonitorOff className="h-5 w-5" /> : <Monitor className="h-5 w-5" />}
+              </button>
+            ) : null}
           </div>
         </div>
       ) : (
